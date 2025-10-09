@@ -1,0 +1,149 @@
+name: Bootstrap OIDC Authentication
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_bootstrap:
+        description: 'Type "bootstrap" to confirm you want to create OIDC provider and IAM role'
+        required: true
+        type: string
+
+env:
+  TF_VERSION: '1.8.0'
+  AWS_REGION: 'us-east-1'
+
+jobs:
+  bootstrap:
+    name: 'Bootstrap OIDC Provider and IAM Role'
+    runs-on: ubuntu-latest
+    if: github.event.inputs.confirm_bootstrap == 'bootstrap'
+    
+    defaults:
+      run:
+        working-directory: terraform-bootstrap
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+      
+      - name: Configure AWS Credentials (Access Keys - Bootstrap Only)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Verify AWS Connection
+        run: |
+          echo "🔍 Verifying AWS connection with access keys..."
+          aws sts get-caller-identity
+          echo "✅ AWS connection verified"
+      
+      - name: Create terraform.tfvars
+        run: |
+          cat > terraform.tfvars <<EOF
+          aws_region = "${{ env.AWS_REGION }}"
+          github_repository = "${{ github.repository }}"
+          github_actions_role_name = "GitHubActions-CloudCustodian-Role"
+          environment = "prod"
+          project_name = "cloud-custodian"
+          EOF
+          echo "📝 Created terraform.tfvars for bootstrap"
+      
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+        continue-on-error: true
+      
+      - name: Terraform Init
+        run: |
+          echo "🔄 Initializing Terraform for bootstrap..."
+          terraform init
+      
+      - name: Terraform Validate
+        run: terraform validate
+      
+      - name: Terraform Plan
+        run: |
+          echo "📋 Planning OIDC provider and IAM role creation..."
+          terraform plan
+      
+      - name: Terraform Apply
+        run: |
+          echo "🚀 Creating OIDC provider and IAM role..."
+          terraform apply -auto-approve
+          echo "✅ Bootstrap completed successfully!"
+      
+      - name: Extract Role ARN
+        id: role_arn
+        run: |
+          ROLE_ARN=$(terraform output -raw github_actions_role_arn)
+          echo "role_arn=$ROLE_ARN" >> $GITHUB_OUTPUT
+          echo "🔑 GitHub Actions Role ARN: $ROLE_ARN"
+      
+      - name: Display Next Steps
+        run: |
+          echo "📋 Bootstrap Summary" >> $GITHUB_STEP_SUMMARY
+          echo "===================" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **OIDC Provider Created**" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **IAM Role Created**" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **Cloud Custodian Policies Attached**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 🔑 GitHub Secret Configuration" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Add the following repository secret:" >> $GITHUB_STEP_SUMMARY
+          echo "- **Name**: \`AWS_ROLE_ARN\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Value**: \`${{ steps.role_arn.outputs.role_arn }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 🔒 Security Improvement" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "After adding the AWS_ROLE_ARN secret:" >> $GITHUB_STEP_SUMMARY
+          echo "1. ✅ All future workflows will use OIDC authentication" >> $GITHUB_STEP_SUMMARY
+          echo "2. 🗑️ You can safely delete ACCESS_KEY and SECRET_ACCESS_KEY secrets" >> $GITHUB_STEP_SUMMARY
+          echo "3. 🛡️ No more long-term AWS credentials in GitHub" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 🚀 Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "1. Add the AWS_ROLE_ARN secret to your repository" >> $GITHUB_STEP_SUMMARY
+          echo "2. Run the 'Deploy Cloud Custodian Infrastructure' workflow" >> $GITHUB_STEP_SUMMARY
+          echo "3. Start using Cloud Custodian policies with OIDC authentication" >> $GITHUB_STEP_SUMMARY
+      
+      - name: Save Bootstrap State Info
+        run: |
+          echo "🏗️ Bootstrap completed on: $(date)" > bootstrap-info.txt
+          echo "🔑 Role ARN: ${{ steps.role_arn.outputs.role_arn }}" >> bootstrap-info.txt
+          echo "📍 AWS Region: ${{ env.AWS_REGION }}" >> bootstrap-info.txt
+          echo "📦 Repository: ${{ github.repository }}" >> bootstrap-info.txt
+      
+      - name: Upload Bootstrap Info
+        uses: actions/upload-artifact@v3
+        with:
+          name: bootstrap-info
+          path: terraform-bootstrap/bootstrap-info.txt
+          retention-days: 30
+
+  validation:
+    name: 'Validate Bootstrap Requirements'
+    runs-on: ubuntu-latest
+    if: github.event.inputs.confirm_bootstrap != 'bootstrap'
+    
+    steps:
+      - name: Invalid Confirmation
+        run: |
+          echo "❌ Bootstrap not confirmed"
+          echo ""
+          echo "To run the bootstrap process:"
+          echo "1. Go to Actions → 'Bootstrap OIDC Authentication'"
+          echo "2. Click 'Run workflow'"
+          echo "3. Type 'bootstrap' in the confirmation field"
+          echo "4. Click 'Run workflow'"
+          echo ""
+          echo "⚠️  This will create AWS resources using your access keys"
+          echo "🔒 After bootstrap, all operations will use secure OIDC authentication"
+          exit 1

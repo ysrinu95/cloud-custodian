@@ -1,0 +1,154 @@
+name: Cloud Custodian Operations
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action to perform'
+        required: true
+        default: 'validate'
+        type: choice
+        options:
+        - validate
+        - run
+        - dryrun
+      policy_path:
+        description: 'Path to policy files (e.g., policies/)'
+        required: false
+        default: 'policies/'
+      output_dir:
+        description: 'Output directory for results'
+        required: false
+        default: 'output/'
+
+env:
+  AWS_REGION: 'us-east-1'
+
+jobs:
+  cloud-custodian:
+    name: 'Cloud Custodian ${{ github.event.inputs.action }}'
+    runs-on: ubuntu-latest
+    
+    permissions:
+      id-token: write
+      contents: read
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-CloudCustodian-${{ github.run_number }}
+      
+      - name: Install Cloud Custodian
+        run: |
+          echo "📦 Installing Cloud Custodian..."
+          pip install --upgrade pip
+          pip install c7n c7n-aws c7n-azure c7n-gcp
+          echo "✅ Cloud Custodian installed"
+      
+      - name: Verify Cloud Custodian Installation
+        run: |
+          echo "🔍 Verifying Cloud Custodian installation..."
+          custodian version
+          echo "✅ Cloud Custodian verification complete"
+      
+      - name: Create policies directory
+        run: |
+          if [ ! -d "${{ github.event.inputs.policy_path }}" ]; then
+            mkdir -p ${{ github.event.inputs.policy_path }}
+            echo "📁 Created policies directory: ${{ github.event.inputs.policy_path }}"
+          fi
+      
+      - name: Create example policy (if no policies exist)
+        run: |
+          if [ ! "$(ls -A ${{ github.event.inputs.policy_path }} 2>/dev/null)" ]; then
+            cat > ${{ github.event.inputs.policy_path }}/example-policy.yml <<EOF
+          policies:
+            - name: ec2-untagged-instances
+              description: Find EC2 instances without required tags
+              resource: aws.ec2
+              filters:
+                - "tag:Environment": absent
+                - "tag:Owner": absent
+              actions:
+                - type: mark-for-op
+                  op: terminate
+                  days: 7
+          EOF
+            echo "📝 Created example policy in ${{ github.event.inputs.policy_path }}"
+          fi
+      
+      - name: Validate Policies
+        if: github.event.inputs.action == 'validate' || github.event.inputs.action == 'run' || github.event.inputs.action == 'dryrun'
+        run: |
+          echo "✅ Validating Cloud Custodian policies..."
+          find ${{ github.event.inputs.policy_path }} -name "*.yml" -o -name "*.yaml" | while read policy_file; do
+            echo "  Validating: $policy_file"
+            custodian validate "$policy_file"
+          done
+          echo "✅ All policies validated successfully"
+      
+      - name: Create output directory
+        if: github.event.inputs.action == 'run' || github.event.inputs.action == 'dryrun'
+        run: |
+          mkdir -p ${{ github.event.inputs.output_dir }}
+          echo "📁 Created output directory: ${{ github.event.inputs.output_dir }}"
+      
+      - name: Run Policies (Dry Run)
+        if: github.event.inputs.action == 'dryrun'
+        run: |
+          echo "🔍 Running Cloud Custodian policies in dry-run mode..."
+          find ${{ github.event.inputs.policy_path }} -name "*.yml" -o -name "*.yaml" | while read policy_file; do
+            echo "  Dry-running: $policy_file"
+            custodian run --dryrun -s ${{ github.event.inputs.output_dir }} "$policy_file"
+          done
+          echo "✅ Dry-run completed"
+      
+      - name: Run Policies (Execute)
+        if: github.event.inputs.action == 'run'
+        run: |
+          echo "🚀 Running Cloud Custodian policies..."
+          find ${{ github.event.inputs.policy_path }} -name "*.yml" -o -name "*.yaml" | while read policy_file; do
+            echo "  Executing: $policy_file"
+            custodian run -s ${{ github.event.inputs.output_dir }} "$policy_file"
+          done
+          echo "✅ Policy execution completed"
+      
+      - name: Upload Results
+        if: github.event.inputs.action == 'run' || github.event.inputs.action == 'dryrun'
+        uses: actions/upload-artifact@v3
+        with:
+          name: custodian-results-${{ github.run_number }}
+          path: ${{ github.event.inputs.output_dir }}
+          retention-days: 30
+      
+      - name: Generate Summary
+        if: github.event.inputs.action == 'run' || github.event.inputs.action == 'dryrun'
+        run: |
+          echo "📊 Cloud Custodian Execution Summary" >> $GITHUB_STEP_SUMMARY
+          echo "=================================" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Action**: ${{ github.event.inputs.action }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Policy Path**: ${{ github.event.inputs.policy_path }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Output Directory**: ${{ github.event.inputs.output_dir }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Execution Time**: $(date)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -d "${{ github.event.inputs.output_dir }}" ]; then
+            echo "**Results Found**:" >> $GITHUB_STEP_SUMMARY
+            find ${{ github.event.inputs.output_dir }} -name "*.json" | while read result_file; do
+              policy_name=$(basename "$(dirname "$result_file")")
+              resource_count=$(jq length "$result_file" 2>/dev/null || echo "0")
+              echo "- **$policy_name**: $resource_count resources" >> $GITHUB_STEP_SUMMARY
+            done
+          fi

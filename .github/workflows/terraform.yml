@@ -1,0 +1,225 @@
+name: Deploy Cloud Custodian Infrastructure
+
+on:
+  push:
+    branches: [ main ]
+    paths: [ 'terraform/**' ]
+  pull_request:
+    branches: [ main ]
+    paths: [ 'terraform/**' ]
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Terraform action to perform'
+        required: true
+        default: 'plan'
+        type: choice
+        options:
+        - plan
+        - apply
+        - destroy
+
+env:
+  TF_VERSION: '1.8.0'
+  AWS_REGION: 'us-east-1'
+
+jobs:
+  terraform:
+    name: 'Terraform Infrastructure'
+    runs-on: ubuntu-latest
+    
+    permissions:
+      id-token: write
+      contents: read
+    
+    defaults:
+      run:
+        working-directory: terraform
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+      
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-CloudCustodian-${{ github.run_number }}
+      
+      - name: Verify AWS Connection
+        run: |
+          echo "🔍 Verifying AWS connection..."
+          aws sts get-caller-identity
+          echo "✅ AWS connection verified"
+      
+      - name: Verify S3 Bucket
+        run: |
+          echo "🔍 Verifying S3 bucket exists..."
+          if aws s3 ls s3://ysr95-cloud-custodian-tf-bkt; then
+            echo "✅ S3 bucket 'ysr95-cloud-custodian-tf-bkt' exists"
+          else
+            echo "❌ S3 bucket 'ysr95-cloud-custodian-tf-bkt' not found"
+            exit 1
+          fi
+      
+      - name: Verify Terraform Version
+        run: |
+          echo "🔍 Verifying Terraform version for S3 native locking..."
+          terraform version
+          TERRAFORM_VERSION=$(terraform version -json | jq -r '.terraform_version')
+          echo "✅ Using Terraform $TERRAFORM_VERSION with S3 native state locking"
+      
+      - name: Remove bootstrap file (if exists)
+        run: |
+          if [ -f "bootstrap.tf" ]; then
+            mv bootstrap.tf bootstrap.tf.bak
+            echo "📦 Moved bootstrap.tf to bootstrap.tf.bak (not needed with Terraform 1.6+)"
+          fi
+      
+      - name: Create terraform.tfvars
+        run: |
+          cat > terraform.tfvars <<EOF
+          aws_region = "${{ env.AWS_REGION }}"
+          github_repository = "${{ github.repository }}"
+          github_actions_role_name = "GitHubActions-CloudCustodian-Role"
+          environment = "prod"
+          project_name = "cloud-custodian"
+          EOF
+          echo "📝 Created terraform.tfvars"
+      
+      - name: Terraform Format Check
+        id: fmt
+        run: terraform fmt -check -recursive
+        continue-on-error: true
+      
+      - name: Terraform Init
+        id: init
+        run: |
+          echo "🔄 Initializing Terraform with S3 backend..."
+          terraform init -upgrade
+      
+      - name: Terraform Validate
+        id: validate
+        run: terraform validate
+      
+      - name: Terraform Plan
+        id: plan
+        run: |
+          terraform plan -detailed-exitcode -no-color -out=tfplan
+          echo "exit_code=$?" >> $GITHUB_OUTPUT
+        continue-on-error: true
+      
+      - name: Save Plan Output
+        id: plan_output
+        if: always()
+        run: |
+          if [ -f "tfplan" ]; then
+            terraform show -no-color tfplan > plan_output.txt
+            # Truncate if too long for GitHub comments
+            if [ $(wc -c < plan_output.txt) -gt 60000 ]; then
+              head -c 30000 plan_output.txt > plan_output_truncated.txt
+              echo -e "\n\n... (truncated due to length) ..." >> plan_output_truncated.txt
+              tail -c 30000 plan_output.txt >> plan_output_truncated.txt
+              mv plan_output_truncated.txt plan_output.txt
+            fi
+          else
+            echo "No plan file generated" > plan_output.txt
+          fi
+      
+      - name: Update Pull Request
+        uses: actions/github-script@v7
+        if: github.event_name == 'pull_request'
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const planOutput = fs.existsSync('terraform/plan_output.txt') 
+              ? fs.readFileSync('terraform/plan_output.txt', 'utf8')
+              : 'No plan output available';
+            
+            const output = `## Terraform Plan Results 🏗️
+            
+            #### Format and Style 🖌 \`${{ steps.fmt.outcome }}\`
+            #### Initialization ⚙️ \`${{ steps.init.outcome }}\`
+            #### Validation 🤖 \`${{ steps.validate.outcome }}\`
+            #### Plan 📖 \`${{ steps.plan.outcome }}\`
+            
+            <details><summary>📋 Show Terraform Plan</summary>
+            
+            \`\`\`hcl
+            ${planOutput}
+            \`\`\`
+            
+            </details>
+            
+            **Action**: \`${{ github.event_name }}\` | **Actor**: @${{ github.actor }}
+            `;
+            
+            // Find existing comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            const botComment = comments.find(comment => 
+              comment.user.type === 'Bot' && comment.body.includes('Terraform Plan Results')
+            );
+            
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: output
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: output
+              });
+            }
+      
+      - name: Terraform Plan Status
+        if: steps.plan.outcome == 'failure'
+        run: |
+          echo "❌ Terraform plan failed"
+          exit 1
+      
+      - name: Terraform Apply
+        if: |
+          (github.ref == 'refs/heads/main' && github.event_name == 'push') ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply')
+        run: |
+          echo "🚀 Applying Terraform configuration..."
+          terraform apply -auto-approve tfplan
+          echo "✅ Terraform apply completed successfully"
+      
+      - name: Terraform Destroy
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy'
+        run: |
+          echo "⚠️ Destroying Terraform infrastructure..."
+          terraform destroy -auto-approve
+          echo "🗑️ Terraform destroy completed"
+      
+      - name: Output Important Information
+        if: |
+          (github.ref == 'refs/heads/main' && github.event_name == 'push') ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply')
+        run: |
+          echo "📋 Terraform Outputs:"
+          terraform output -json | jq -r 'to_entries[] | "  \(.key) = \(.value.value)"'
+          
+          echo ""
+          echo "🔑 Important: Add the following to your GitHub repository secrets:"
+          echo "  Secret Name: AWS_ROLE_ARN"
+          echo "  Secret Value: $(terraform output -raw github_actions_role_arn)"

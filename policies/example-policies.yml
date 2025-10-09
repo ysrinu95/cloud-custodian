@@ -1,0 +1,60 @@
+policies:
+  # Example policy: Find untagged EC2 instances
+  - name: ec2-untagged-instances
+    description: |
+      Find EC2 instances that are missing required tags.
+      This is a common compliance requirement.
+    resource: aws.ec2
+    filters:
+      # Instance must be running
+      - "State.Name": running
+      # Missing Environment tag
+      - "tag:Environment": absent
+    actions:
+      # Tag the instance for review
+      - type: tag
+        key: ComplianceStatus
+        value: NonCompliant-MissingTags
+      # Mark for termination in 7 days
+      - type: mark-for-op
+        op: terminate
+        days: 7
+        tag: c7n_marked_for_termination
+
+  # Example policy: Find oversized EBS volumes
+  - name: ebs-oversized-volumes
+    description: |
+      Find EBS volumes larger than 100GB that might be candidates
+      for cost optimization.
+    resource: aws.ebs
+    filters:
+      # Volume must be available (not attached)
+      - "State": available
+      # Size greater than 100GB
+      - type: value
+        key: Size
+        op: gt
+        value: 100
+    actions:
+      # Tag for review
+      - type: tag
+        key: CostOptimization
+        value: LargeUnusedVolume
+      # Create snapshot before any action
+      - type: snapshot
+        copy-tags: true
+
+  # Example policy: S3 buckets without encryption
+  - name: s3-unencrypted-buckets
+    description: |
+      Find S3 buckets that don't have default encryption enabled.
+      This is a security best practice.
+    resource: aws.s3
+    filters:
+      # Check for default encryption
+      - type: bucket-encryption
+        state: false
+    actions:
+      # Enable default AES256 encryption
+      - type: set-bucket-encryption
+        encryption: AES256
