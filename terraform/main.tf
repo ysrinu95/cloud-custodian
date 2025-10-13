@@ -1,18 +1,18 @@
 # AWS Provider Configuration
 terraform {
   required_version = ">= 1.6"
-  
+
   # S3 Backend for Remote State with native locking
   backend "s3" {
     bucket  = "ysr95-cloud-custodian-tf-bkt"
     key     = "terraform/cloud-custodian/terraform.tfstate"
     region  = "us-east-1"
     encrypt = true
-    
+
     # Enable S3 native state locking (no DynamoDB required)
     use_lockfile = true
   }
-  
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -61,7 +61,7 @@ resource "random_string" "bucket_suffix" {
 # Enable versioning on the outputs bucket
 resource "aws_s3_bucket_versioning" "custodian_outputs" {
   bucket = aws_s3_bucket.custodian_outputs.id
-  
+
   versioning_configuration {
     status = "Enabled"
   }
@@ -124,7 +124,6 @@ resource "aws_iam_role" "custodian_lambda_execution" {
 
   # Temporarily removed tags due to permission issues
   # Will be added back after IAM permissions are updated
-  }
 }
 
 # Attach basic Lambda execution policy
