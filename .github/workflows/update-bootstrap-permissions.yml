@@ -49,6 +49,32 @@ jobs:
           aws sts get-caller-identity
           echo "✅ AWS connection verified"
       
+      - name: Check Current Permissions
+        run: |
+          echo "🔍 Checking current IAM permissions..."
+          
+          # List attached policies
+          echo "📋 Currently attached policies:"
+          aws iam list-attached-role-policies --role-name GitHubActions-CloudCustodian-Role
+          
+          # Check if CloudCustodianPolicy exists and what permissions it has
+          POLICY_ARN=$(aws iam list-attached-role-policies --role-name GitHubActions-CloudCustodian-Role --query 'AttachedPolicies[?PolicyName==`CloudCustodianPolicy`].PolicyArn' --output text)
+          
+          if [ -n "$POLICY_ARN" ]; then
+            echo "📋 Found CloudCustodianPolicy: $POLICY_ARN"
+            CURRENT_VERSION=$(aws iam get-policy --policy-arn "$POLICY_ARN" --query 'Policy.DefaultVersionId' --output text)
+            echo "📋 Current version: $CURRENT_VERSION"
+            
+            # Check for specific permissions
+            echo "🔍 Checking for iam:CreatePolicyVersion permission..."
+            aws iam get-policy-version --policy-arn "$POLICY_ARN" --version-id "$CURRENT_VERSION" --query 'PolicyVersion.Document.Statement[0].Action' --output json | grep -q "iam:CreatePolicyVersion" && echo "✅ Has iam:CreatePolicyVersion" || echo "❌ Missing iam:CreatePolicyVersion"
+            
+            echo "🔍 Checking for lambda:TagResource permission..."
+            aws iam get-policy-version --policy-arn "$POLICY_ARN" --version-id "$CURRENT_VERSION" --query 'PolicyVersion.Document.Statement[0].Action' --output json | grep -q "lambda:TagResource" && echo "✅ Has lambda:TagResource" || echo "❌ Missing lambda:TagResource"
+          else
+            echo "❌ CloudCustodianPolicy not found"
+          fi
+      
       - name: Terraform Init
         working-directory: terraform-bootstrap
         run: |
@@ -69,30 +95,22 @@ jobs:
           echo "📊 Terraform Plan Summary:" >> $GITHUB_STEP_SUMMARY
           echo "=========================" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Plan Output:**" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           terraform show -no-color tfplan | head -50 >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          
+          # Also show in console for debugging
+          echo "📋 Plan Details:"
+          terraform show -no-color tfplan
       
       - name: Bootstrap Permission Fix
         if: github.event.inputs.action == 'apply'
         run: |
-          echo "🔧 Checking if we need to bootstrap IAM policy version permissions..."
+          echo "🔧 Bootstrap Permission Fix - Adding temporary policy version permissions..."
           
-          # Get the current policy ARN
-          POLICY_ARN=$(aws iam list-attached-role-policies --role-name GitHubActions-CloudCustodian-Role --query 'AttachedPolicies[?PolicyName==`CloudCustodianPolicy`].PolicyArn' --output text)
-          
-          if [ -n "$POLICY_ARN" ]; then
-            echo "📋 Found policy: $POLICY_ARN"
-            
-            # Check if we already have CreatePolicyVersion permission
-            CURRENT_VERSION=$(aws iam get-policy --policy-arn "$POLICY_ARN" --query 'Policy.DefaultVersionId' --output text)
-            HAS_PERMISSION=$(aws iam get-policy-version --policy-arn "$POLICY_ARN" --version-id "$CURRENT_VERSION" --query 'PolicyVersion.Document.Statement[0].Action' --output json | grep -c "iam:CreatePolicyVersion" || echo "0")
-            
-            if [ "$HAS_PERMISSION" -eq "0" ]; then
-              echo "⚠️ Missing iam:CreatePolicyVersion permission - adding temporarily..."
-              
-              # Create a temporary policy document with the missing permission
-              cat > temp_policy.json << 'EOF'
+          # Always create and attach the temporary policy to ensure we have the permissions
+          cat > temp_policy.json << 'EOF'
           {
             "Version": "2012-10-17",
             "Statement": [
@@ -110,28 +128,35 @@ jobs:
             ]
           }
           EOF
-              
-              # Create a temporary policy for policy version management
-              TEMP_POLICY_ARN=$(aws iam create-policy --policy-name "TempPolicyVersionManagement-$(date +%s)" --policy-document file://temp_policy.json --query 'Policy.Arn' --output text)
-              echo "📝 Created temporary policy: $TEMP_POLICY_ARN"
-              
-              # Attach the temporary policy to the role
-              aws iam attach-role-policy --role-name GitHubActions-CloudCustodian-Role --policy-arn "$TEMP_POLICY_ARN"
-              echo "✅ Attached temporary policy"
-              
-              # Wait a moment for the permission to propagate
-              echo "⏳ Waiting for permission propagation..."
-              sleep 10
-              
-              # Store the temp policy ARN for cleanup
-              echo "TEMP_POLICY_ARN=$TEMP_POLICY_ARN" >> $GITHUB_ENV
-            else
-              echo "✅ Already has iam:CreatePolicyVersion permission"
-            fi
-          else
-            echo "❌ Could not find CloudCustodianPolicy"
-            exit 1
-          fi
+          
+          # Create a unique temporary policy name
+          TIMESTAMP=$(date +%s)
+          TEMP_POLICY_NAME="TempPolicyVersionManagement-$TIMESTAMP"
+          
+          echo "📝 Creating temporary policy: $TEMP_POLICY_NAME"
+          TEMP_POLICY_ARN=$(aws iam create-policy \
+            --policy-name "$TEMP_POLICY_NAME" \
+            --policy-document file://temp_policy.json \
+            --query 'Policy.Arn' \
+            --output text)
+          
+          echo "✅ Created temporary policy: $TEMP_POLICY_ARN"
+          
+          # Attach the temporary policy to the GitHub Actions role
+          echo "🔗 Attaching temporary policy to GitHubActions-CloudCustodian-Role..."
+          aws iam attach-role-policy \
+            --role-name GitHubActions-CloudCustodian-Role \
+            --policy-arn "$TEMP_POLICY_ARN"
+          
+          echo "✅ Attached temporary policy successfully"
+          
+          # Wait for permission propagation
+          echo "⏳ Waiting 15 seconds for permission propagation..."
+          sleep 15
+          
+          # Store for cleanup
+          echo "TEMP_POLICY_ARN=$TEMP_POLICY_ARN" >> $GITHUB_ENV
+          echo "🎯 Bootstrap permissions ready for Terraform apply"
 
       - name: Terraform Apply
         if: github.event.inputs.action == 'apply'
@@ -142,17 +167,23 @@ jobs:
           echo "✅ Terraform apply completed"
 
       - name: Cleanup Temporary Policy
-        if: github.event.inputs.action == 'apply' && env.TEMP_POLICY_ARN != ''
+        if: github.event.inputs.action == 'apply'
         run: |
           echo "🧹 Cleaning up temporary policy..."
           
-          # Detach the temporary policy
-          aws iam detach-role-policy --role-name GitHubActions-CloudCustodian-Role --policy-arn "$TEMP_POLICY_ARN" || echo "Policy already detached"
-          
-          # Delete the temporary policy
-          aws iam delete-policy --policy-arn "$TEMP_POLICY_ARN" || echo "Policy already deleted"
-          
-          echo "✅ Temporary policy cleaned up"
+          if [ -n "$TEMP_POLICY_ARN" ]; then
+            echo "🔄 Detaching temporary policy: $TEMP_POLICY_ARN"
+            aws iam detach-role-policy \
+              --role-name GitHubActions-CloudCustodian-Role \
+              --policy-arn "$TEMP_POLICY_ARN" || echo "⚠️ Policy already detached"
+            
+            echo "🗑️ Deleting temporary policy: $TEMP_POLICY_ARN"
+            aws iam delete-policy --policy-arn "$TEMP_POLICY_ARN" || echo "⚠️ Policy already deleted"
+            
+            echo "✅ Temporary policy cleaned up successfully"
+          else
+            echo "ℹ️ No temporary policy to clean up"
+          fi
       
       - name: Verify Updated Permissions
         if: github.event.inputs.action == 'apply'
