@@ -119,26 +119,36 @@ jobs:
         run: |
           echo "🚀 Deploying Cloud Custodian policies as Lambda functions..."
           
+          # Set environment variables for Lambda deployment
+          export C7N_LAMBDA_ROLE=${{ steps.lambda_role.outputs.role_arn }}
+          export C7N_LAMBDA_TIMEOUT=${{ github.event.inputs.lambda_timeout }}
+          export C7N_LAMBDA_MEMORY=${{ github.event.inputs.lambda_memory }}
+          
           # Deploy each policy file as Lambda functions with event triggers
           find ${{ github.event.inputs.policy_path }} -name "*.yml" -o -name "*.yaml" | while read policy_file; do
             echo ""
             echo "📦 Deploying policy file: $policy_file"
             
-            # Deploy in Lambda mode with CloudWatch Events
-            custodian run \
-              --mode lambda \
-              --region ${{ env.AWS_REGION }} \
-              --role ${{ steps.lambda_role.outputs.role_arn }} \
-              --timeout ${{ github.event.inputs.lambda_timeout }} \
-              --memory ${{ github.event.inputs.lambda_memory }} \
-              --output-dir lambda-output \
-              "$policy_file"
+            # For policies with mode specified, they will deploy as Lambda
+            # For policies without mode, run in dry-run to validate
+            if grep -q "mode:" "$policy_file"; then
+              echo "  Policy has Lambda/periodic mode - deploying as Lambda functions"
+              custodian run \
+                --output-dir lambda-output \
+                "$policy_file"
+            else
+              echo "  Policy is standard mode - running validation"
+              custodian run \
+                --dryrun \
+                --output-dir lambda-output \
+                "$policy_file"
+            fi
             
-            echo "✅ Deployed Lambda functions for: $policy_file"
+            echo "✅ Processed policy file: $policy_file"
           done
           
           echo ""
-          echo "🎉 All Lambda functions deployed successfully!"
+          echo "🎉 All policies processed successfully!"
       
       - name: List Deployed Lambda Functions
         if: github.event.inputs.deployment_action == 'deploy' || github.event.inputs.deployment_action == 'update'
