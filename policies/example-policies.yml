@@ -59,15 +59,17 @@ policies:
       # Check for default encryption
       - type: bucket-encryption
         state: false
-      # Exclude buckets with specific naming patterns (if needed)
+      # Exclude buckets with specific names (if needed)
       - type: value
         key: Name
-        op: not-regex
-        value: '^(aws-cloudtrail-logs-|aws-config-bucket-)'
+        op: not-in
+        value:
+          - aws-cloudtrail-logs
+          - aws-config-bucket
     actions:
       # Enable default AES256 encryption
       - type: set-bucket-encryption
-        encryption: AES256
+        crypto: AES256
       # Tag bucket for compliance tracking
       - type: tag
         key: EncryptionEnabled

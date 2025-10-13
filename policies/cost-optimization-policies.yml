@@ -50,10 +50,11 @@ policies:
       - type: age
         days: 90
       # Not used for AMI creation
-      - type: value
-        key: Description
-        op: not-regex
-        value: ".*Created by CreateImage.*"
+      - not:
+          - type: value
+            key: Description
+            op: regex
+            value: ".*Created by CreateImage.*"
     actions:
       # Tag for review
       - type: tag
@@ -124,11 +125,11 @@ policies:
     description: |
       Find Reserved Instances that are not being fully utilized.
       These represent wasted pre-paid capacity.
-    resource: aws.reserved-instances
+    resource: aws.ec2-reserved
     filters:
       # Reserved instance is active
       - "State": active
-      # Usage is low (this would need custom logic)
+      # Has unused capacity
       - type: value
         key: InstanceCount
         op: greater-than
