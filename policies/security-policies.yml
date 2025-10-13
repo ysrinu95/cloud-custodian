@@ -11,7 +11,7 @@ policies:
         BlockPublicAcls: false
     actions:
       # Immediately block public access
-      - type: set-public-access-block
+      - type: set-public-block
         BlockPublicAcls: true
         BlockPublicPolicy: true
         IgnorePublicAcls: true
