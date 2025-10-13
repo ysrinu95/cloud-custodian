@@ -1,0 +1,174 @@
+name: Scheduled Cloud Custodian Policies
+
+on:
+  schedule:
+    # Run daily at 6 AM UTC (2 AM EST)
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      policy_set:
+        description: 'Which policy set to run'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+        - all
+        - security
+        - cost-optimization
+        - compliance
+
+env:
+  AWS_REGION: 'us-east-1'
+
+jobs:
+  scheduled-policies:
+    name: 'Run Scheduled Cloud Custodian Policies'
+    runs-on: ubuntu-latest
+    
+    permissions:
+      id-token: write
+      contents: read
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-CloudCustodian-Scheduled-${{ github.run_number }}
+      
+      - name: Verify AWS Connection
+        run: |
+          echo "🔍 Verifying AWS connection..."
+          aws sts get-caller-identity
+          echo "✅ AWS connection verified"
+      
+      - name: Install Cloud Custodian
+        run: |
+          echo "📦 Installing Cloud Custodian..."
+          pip install --upgrade pip
+          pip install c7n c7n-aws
+          echo "✅ Cloud Custodian installed"
+          custodian version
+      
+      - name: Create output directory
+        run: |
+          mkdir -p output/scheduled-run-$(date +%Y%m%d-%H%M%S)
+          echo "OUTPUT_DIR=output/scheduled-run-$(date +%Y%m%d-%H%M%S)" >> $GITHUB_ENV
+      
+      - name: Run Security Policies
+        if: github.event.inputs.policy_set == 'security' || github.event.inputs.policy_set == 'all' || github.event_name == 'schedule'
+        run: |
+          echo "🛡️ Running security policies..."
+          if [ -f "policies/security-policies.yml" ]; then
+            custodian run --dryrun -s $OUTPUT_DIR/security policies/security-policies.yml
+            echo "✅ Security policies completed"
+          else
+            echo "⚠️ Security policies file not found"
+          fi
+      
+      - name: Run Cost Optimization Policies
+        if: github.event.inputs.policy_set == 'cost-optimization' || github.event.inputs.policy_set == 'all' || github.event_name == 'schedule'
+        run: |
+          echo "💰 Running cost optimization policies..."
+          if [ -f "policies/cost-optimization-policies.yml" ]; then
+            custodian run --dryrun -s $OUTPUT_DIR/cost-optimization policies/cost-optimization-policies.yml
+            echo "✅ Cost optimization policies completed"
+          else
+            echo "⚠️ Cost optimization policies file not found"
+          fi
+      
+      - name: Run Compliance Policies
+        if: github.event.inputs.policy_set == 'compliance' || github.event.inputs.policy_set == 'all' || github.event_name == 'schedule'
+        run: |
+          echo "📋 Running compliance policies..."
+          if [ -f "policies/example-policies.yml" ]; then
+            custodian run --dryrun -s $OUTPUT_DIR/compliance policies/example-policies.yml
+            echo "✅ Compliance policies completed"
+          else
+            echo "⚠️ Compliance policies file not found"
+          fi
+      
+      - name: Generate Report Summary
+        run: |
+          echo "📊 Cloud Custodian Scheduled Report" >> $GITHUB_STEP_SUMMARY
+          echo "=================================" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Execution Date**: $(date)" >> $GITHUB_STEP_SUMMARY
+          echo "**Mode**: Dry Run (No actual changes made)" >> $GITHUB_STEP_SUMMARY
+          echo "**Account**: $(aws sts get-caller-identity --query Account --output text)" >> $GITHUB_STEP_SUMMARY
+          echo "**Region**: $AWS_REGION" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -d "$OUTPUT_DIR" ]; then
+            echo "## 📋 Policy Execution Summary" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            
+            # Count resources found by each policy
+            for category in security cost-optimization compliance; do
+              if [ -d "$OUTPUT_DIR/$category" ]; then
+                echo "### $category" >> $GITHUB_STEP_SUMMARY
+                find "$OUTPUT_DIR/$category" -name "*.json" | while read result_file; do
+                  policy_name=$(basename "$(dirname "$result_file")")
+                  resource_count=$(jq length "$result_file" 2>/dev/null || echo "0")
+                  if [ "$resource_count" -gt 0 ]; then
+                    echo "- ⚠️  **$policy_name**: $resource_count resources found" >> $GITHUB_STEP_SUMMARY
+                  else
+                    echo "- ✅ **$policy_name**: No issues found" >> $GITHUB_STEP_SUMMARY
+                  fi
+                done
+                echo "" >> $GITHUB_STEP_SUMMARY
+              fi
+            done
+          fi
+          
+          echo "## 🔍 Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "1. Review the uploaded artifacts for detailed findings" >> $GITHUB_STEP_SUMMARY
+          echo "2. For actual remediation, run the 'Cloud Custodian Operations' workflow with 'run' action" >> $GITHUB_STEP_SUMMARY
+          echo "3. Consider updating policies based on findings" >> $GITHUB_STEP_SUMMARY
+      
+      - name: Upload Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: scheduled-custodian-results-${{ github.run_number }}
+          path: ${{ env.OUTPUT_DIR }}
+          retention-days: 30
+      
+      - name: Check for Critical Issues
+        run: |
+          echo "🔍 Checking for critical security issues..."
+          CRITICAL_ISSUES=0
+          
+          # Check for public S3 buckets
+          if [ -f "$OUTPUT_DIR/security/s3-public-buckets/resources.json" ]; then
+            PUBLIC_BUCKETS=$(jq length "$OUTPUT_DIR/security/s3-public-buckets/resources.json" 2>/dev/null || echo "0")
+            if [ "$PUBLIC_BUCKETS" -gt 0 ]; then
+              echo "🚨 CRITICAL: $PUBLIC_BUCKETS public S3 buckets found!"
+              CRITICAL_ISSUES=$((CRITICAL_ISSUES + PUBLIC_BUCKETS))
+            fi
+          fi
+          
+          # Check for wide-open security groups
+          if [ -f "$OUTPUT_DIR/security/security-groups-wide-open/resources.json" ]; then
+            OPEN_SG=$(jq length "$OUTPUT_DIR/security/security-groups-wide-open/resources.json" 2>/dev/null || echo "0")
+            if [ "$OPEN_SG" -gt 0 ]; then
+              echo "🚨 WARNING: $OPEN_SG security groups with wide-open access found!"
+              CRITICAL_ISSUES=$((CRITICAL_ISSUES + OPEN_SG))
+            fi
+          fi
+          
+          if [ "$CRITICAL_ISSUES" -gt 0 ]; then
+            echo "⚠️ Total critical issues found: $CRITICAL_ISSUES"
+            echo "💡 Consider running remediation policies or manual review"
+          else
+            echo "✅ No critical security issues found"
+          fi
