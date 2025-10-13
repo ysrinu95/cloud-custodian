@@ -47,12 +47,8 @@ data "aws_iam_role" "github_actions" {
 resource "aws_s3_bucket" "custodian_outputs" {
   bucket = "ysr95-cloud-custodian-outputs-${random_string.bucket_suffix.result}"
 
-  tags = {
-    Name        = "Cloud Custodian Outputs"
-    Purpose     = "Cloud-Custodian-Outputs"
-    ManagedBy   = "Terraform"
-    Environment = var.environment
-  }
+  # Temporarily removed tags due to permission issues
+  # Will be added back after IAM permissions are updated
 }
 
 # Random suffix for bucket name uniqueness
@@ -97,23 +93,16 @@ resource "aws_cloudwatch_log_group" "custodian_logs" {
   name              = "/aws/cloud-custodian/${var.project_name}"
   retention_in_days = 30
 
-  tags = {
-    Name        = "Cloud Custodian Logs"
-    Purpose     = "Cloud-Custodian-Logging"
-    ManagedBy   = "Terraform"
-    Environment = var.environment
-  }
+  # Temporarily removed tags due to permission issues
+  # Will be added back after IAM permissions are updated
 }
 
 # SNS Topic for Cloud Custodian notifications
 resource "aws_sns_topic" "custodian_notifications" {
   name = "cloud-custodian-notifications"
 
-  tags = {
-    Name        = "Cloud Custodian Notifications"
-    Purpose     = "Cloud-Custodian-Notifications"
-    ManagedBy   = "Terraform"
-    Environment = var.environment
+  # Temporarily removed tags due to permission issues
+  # Will be added back after IAM permissions are updated
   }
 }
 
@@ -134,11 +123,8 @@ resource "aws_iam_role" "custodian_lambda_execution" {
     ]
   })
 
-  tags = {
-    Name        = "Cloud Custodian Lambda Execution Role"
-    Purpose     = "Cloud-Custodian-Lambda"
-    ManagedBy   = "Terraform"
-    Environment = var.environment
+  # Temporarily removed tags due to permission issues
+  # Will be added back after IAM permissions are updated
   }
 }
 
@@ -173,12 +159,8 @@ resource "aws_iam_policy" "custodian_lambda_policy" {
     ]
   })
 
-  tags = {
-    Name        = "Cloud Custodian Lambda Policy"
-    Purpose     = "Cloud-Custodian-Lambda"
-    ManagedBy   = "Terraform"
-    Environment = var.environment
-  }
+  # Temporarily removed tags due to permission issues
+  # Will be added back after IAM permissions are updated
 }
 
 # Attach custom policy to Lambda execution role
