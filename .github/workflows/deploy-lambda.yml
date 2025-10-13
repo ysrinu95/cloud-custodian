@@ -66,9 +66,12 @@ jobs:
       - name: Install Cloud Custodian
         run: |
           echo "📦 Installing Cloud Custodian..."
-          pip install c7n c7n-aws
+          pip install --upgrade pip
+          pip install 'c7n>=0.9.40'
           echo "✅ Cloud Custodian installation complete"
+          echo "📋 Installed version:"
           custodian version
+          pip show c7n
       
       - name: Validate Policy Files
         run: |
