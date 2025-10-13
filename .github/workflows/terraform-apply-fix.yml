@@ -1,0 +1,124 @@
+name: Apply Terraform (Manual Fix)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_apply:
+        description: 'Type "apply" to confirm infrastructure deployment'
+        required: true
+        type: string
+
+env:
+  TF_VERSION: '1.8.0'
+  AWS_REGION: 'us-east-1'
+  TF_STATE_BUCKET: 'ysr95-cloud-custodian-tf-bkt'
+
+jobs:
+  apply:
+    name: 'Apply Terraform Infrastructure'
+    runs-on: ubuntu-latest
+    if: github.event.inputs.confirm_apply == 'apply'
+    
+    permissions:
+      id-token: write
+      contents: read
+    
+    defaults:
+      run:
+        working-directory: terraform
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+      
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-CloudCustodian-Apply-${{ github.run_number }}
+      
+      - name: Verify AWS Connection
+        run: |
+          echo "🔍 Verifying AWS connection..."
+          aws sts get-caller-identity
+          echo "✅ AWS connection verified"
+      
+      - name: Remove bootstrap file (if exists)
+        run: |
+          if [ -f "bootstrap.tf" ]; then
+            mv bootstrap.tf bootstrap.tf.bak
+            echo "📦 Moved bootstrap.tf to bootstrap.tf.bak"
+          fi
+      
+      - name: Create terraform.tfvars
+        run: |
+          cat > terraform.tfvars <<EOF
+          aws_region = "${{ env.AWS_REGION }}"
+          github_repository = "${{ github.repository }}"
+          github_actions_role_name = "GitHubActions-CloudCustodian-Role"
+          environment = "prod"
+          project_name = "cloud-custodian"
+          EOF
+          echo "📝 Created terraform.tfvars"
+      
+      - name: Terraform Init (S3 backend)
+        run: |
+          echo "🔄 Initializing Terraform with S3 backend..."
+          terraform init -upgrade \
+            -backend-config="bucket=${{ env.TF_STATE_BUCKET }}" \
+            -backend-config="key=terraform/cloud-custodian/terraform.tfstate" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="encrypt=true"
+      
+      - name: Terraform Validate
+        run: terraform validate
+      
+      - name: Terraform Plan (Show Only)
+        run: |
+          echo "📋 Showing what will be applied..."
+          terraform plan -no-color
+          echo "✅ Plan shown above - proceeding to apply"
+      
+      - name: Terraform Apply (Direct)
+        run: |
+          echo "🚀 Applying Terraform configuration directly..."
+          terraform apply -auto-approve
+          echo "✅ Terraform apply completed successfully"
+      
+      - name: Show Outputs
+        run: |
+          echo "📋 Terraform Outputs:"
+          terraform output -json | jq -r 'to_entries[] | "  \(.key) = \(.value.value)"'
+          
+          echo ""
+          echo "🔑 Important Infrastructure Created:"
+          echo "  Lambda Role ARN: $(terraform output -raw custodian_lambda_role_arn)"
+          echo "  S3 Bucket: $(terraform output -raw custodian_outputs_bucket)"
+          echo "  SNS Topic ARN: $(terraform output -raw custodian_sns_topic_arn)"
+          echo "  Log Group: $(terraform output -raw custodian_log_group)"
+
+  validation:
+    name: 'Validate Input'
+    runs-on: ubuntu-latest
+    if: github.event.inputs.confirm_apply != 'apply'
+    
+    steps:
+      - name: Invalid Confirmation
+        run: |
+          echo "❌ Apply not confirmed"
+          echo ""
+          echo "To deploy Cloud Custodian infrastructure:"
+          echo "1. Go to Actions → 'Apply Terraform (Manual Fix)'"
+          echo "2. Click 'Run workflow'"
+          echo "3. Type 'apply' in the confirmation field"
+          echo "4. Click 'Run workflow'"
+          echo ""
+          echo "⚠️  This will create AWS resources for Cloud Custodian"
+          exit 1
