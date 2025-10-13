@@ -1,0 +1,136 @@
+name: Update Bootstrap IAM Permissions
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Terraform action to perform'
+        required: true
+        default: 'apply'
+        type: choice
+        options:
+        - plan
+        - apply
+
+env:
+  AWS_REGION: 'us-east-1'
+  TF_VAR_aws_region: 'us-east-1'
+  TF_VAR_github_repository: 'ysrinu95/cloud-custodian'
+  TF_VAR_github_actions_role_name: 'GitHubActions-CloudCustodian-Role'
+
+jobs:
+  update-bootstrap:
+    name: 'Update Bootstrap Permissions'
+    runs-on: ubuntu-latest
+    
+    permissions:
+      id-token: write
+      contents: read
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '>=1.6'
+      
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Bootstrap-Update-${{ github.run_number }}
+      
+      - name: Verify AWS Connection
+        run: |
+          echo "🔍 Verifying AWS connection..."
+          aws sts get-caller-identity
+          echo "✅ AWS connection verified"
+      
+      - name: Terraform Init
+        working-directory: terraform-bootstrap
+        run: |
+          echo "🔧 Initializing Terraform..."
+          terraform init
+          echo "✅ Terraform initialized"
+      
+      - name: Terraform Plan
+        working-directory: terraform-bootstrap
+        run: |
+          echo "📋 Planning Terraform changes..."
+          terraform plan -out=tfplan
+          echo "✅ Terraform plan completed"
+      
+      - name: Show Plan Summary
+        working-directory: terraform-bootstrap
+        run: |
+          echo "📊 Terraform Plan Summary:" >> $GITHUB_STEP_SUMMARY
+          echo "=========================" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          terraform show -no-color tfplan | head -50 >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+      
+      - name: Terraform Apply
+        if: github.event.inputs.action == 'apply'
+        working-directory: terraform-bootstrap
+        run: |
+          echo "🚀 Applying Terraform changes..."
+          terraform apply -auto-approve tfplan
+          echo "✅ Terraform apply completed"
+      
+      - name: Verify Updated Permissions
+        if: github.event.inputs.action == 'apply'
+        run: |
+          echo "🔍 Verifying updated IAM permissions..."
+          
+          # Check if the role has the new Lambda permissions
+          POLICY_ARN=$(aws iam list-attached-role-policies --role-name GitHubActions-CloudCustodian-Role --query 'AttachedPolicies[?PolicyName==`CloudCustodianPolicy`].PolicyArn' --output text)
+          
+          if [ -n "$POLICY_ARN" ]; then
+            echo "✅ CloudCustodianPolicy found: $POLICY_ARN"
+            
+            # Get the policy version
+            POLICY_VERSION=$(aws iam get-policy --policy-arn "$POLICY_ARN" --query 'Policy.DefaultVersionId' --output text)
+            echo "📋 Policy version: $POLICY_VERSION"
+            
+            # Check if lambda:TagResource is in the policy
+            aws iam get-policy-version --policy-arn "$POLICY_ARN" --version-id "$POLICY_VERSION" --query 'PolicyVersion.Document.Statement[0].Action' --output json | grep -q "lambda:TagResource"
+            
+            if [ $? -eq 0 ]; then
+              echo "✅ lambda:TagResource permission found in policy"
+            else
+              echo "❌ lambda:TagResource permission not found in policy"
+            fi
+          else
+            echo "❌ CloudCustodianPolicy not found"
+          fi
+      
+      - name: Generate Summary
+        if: always()
+        run: |
+          echo "🔧 Bootstrap IAM Permission Update" >> $GITHUB_STEP_SUMMARY
+          echo "==================================" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Action**: ${{ github.event.inputs.action }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Timestamp**: $(date)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ github.event.inputs.action }}" == "apply" ]; then
+            echo "## ✅ Updated Permissions" >> $GITHUB_STEP_SUMMARY
+            echo "- **lambda:TagResource** - Tag Lambda functions during deployment" >> $GITHUB_STEP_SUMMARY
+            echo "- **lambda:UntagResource** - Remove tags from Lambda functions" >> $GITHUB_STEP_SUMMARY
+            echo "- **lambda:ListTags** - List tags on Lambda functions" >> $GITHUB_STEP_SUMMARY
+            echo "- **events:TagResource** - Tag CloudWatch Event rules" >> $GITHUB_STEP_SUMMARY
+            echo "- **events:UntagResource** - Remove tags from CloudWatch Event rules" >> $GITHUB_STEP_SUMMARY
+            echo "- **events:ListTagsForResource** - List tags on CloudWatch Event rules" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "## 🎯 Next Steps" >> $GITHUB_STEP_SUMMARY
+            echo "- **Lambda deployment should now work** without permission errors" >> $GITHUB_STEP_SUMMARY
+            echo "- **Re-run the Deploy Lambda Functions workflow** to deploy Cloud Custodian policies" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## 📋 Plan Only" >> $GITHUB_STEP_SUMMARY
+            echo "Run with 'apply' action to update the IAM permissions." >> $GITHUB_STEP_SUMMARY
+          fi
