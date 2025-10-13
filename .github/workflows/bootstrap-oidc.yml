@@ -190,42 +190,72 @@ jobs:
         run: terraform validate
       
       - name: Terraform Plan
+        id: plan
         run: |
           echo "📋 Planning OIDC provider and IAM role creation..."
           echo "🔍 Terraform will show what resources will be created/updated/destroyed..."
-          terraform plan -detailed-exitcode
+          terraform plan -detailed-exitcode -out=tfplan
           PLAN_EXIT_CODE=$?
+          echo "plan_exit_code=$PLAN_EXIT_CODE" >> $GITHUB_OUTPUT
           
           if [ $PLAN_EXIT_CODE -eq 0 ]; then
             echo "✅ No changes needed - resources already exist and are up to date"
+            echo "plan_status=no-changes" >> $GITHUB_OUTPUT
           elif [ $PLAN_EXIT_CODE -eq 2 ]; then
             echo "🔄 Changes detected - will create/update resources"
+            echo "plan_status=changes-detected" >> $GITHUB_OUTPUT
           else
-            echo "❌ Terraform plan failed"
+            echo "❌ Terraform plan failed with exit code $PLAN_EXIT_CODE"
+            echo "plan_status=failed" >> $GITHUB_OUTPUT
             exit $PLAN_EXIT_CODE
           fi
+        continue-on-error: false
       
       - name: Terraform Apply
+        if: steps.plan.outputs.plan_status == 'changes-detected' || steps.plan.outputs.plan_status == 'no-changes'
         run: |
-          echo "🚀 Creating OIDC provider and IAM role..."
-          terraform apply -auto-approve
-          echo "✅ Bootstrap completed successfully!"
+          if [ "${{ steps.plan.outputs.plan_status }}" == "no-changes" ]; then
+            echo "✅ No changes to apply - infrastructure is already up to date"
+          else
+            echo "🚀 Applying Terraform plan to create/update resources..."
+            terraform apply -auto-approve tfplan
+            echo "✅ Bootstrap completed successfully!"
+          fi
       
       - name: Extract Role ARN
         id: role_arn
+        if: always() && (steps.plan.outputs.plan_status == 'changes-detected' || steps.plan.outputs.plan_status == 'no-changes')
         run: |
-          ROLE_ARN=$(terraform output -raw github_actions_role_arn)
-          echo "role_arn=$ROLE_ARN" >> $GITHUB_OUTPUT
-          echo "🔑 GitHub Actions Role ARN: $ROLE_ARN"
+          echo "🔑 Extracting GitHub Actions Role ARN..."
+          ROLE_ARN=$(terraform output -raw github_actions_role_arn 2>/dev/null || echo "")
+          
+          if [ -n "$ROLE_ARN" ]; then
+            echo "role_arn=$ROLE_ARN" >> $GITHUB_OUTPUT
+            echo "🔑 GitHub Actions Role ARN: $ROLE_ARN"
+          else
+            echo "⚠️ Could not extract role ARN - this may be expected if resources don't exist yet"
+            # Try to get it from planned outputs if available
+            echo "role_arn=arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/GitHubActions-CloudCustodian-Role" >> $GITHUB_OUTPUT
+          fi
       
       - name: Display Next Steps
+        if: always() && (steps.plan.outputs.plan_status == 'changes-detected' || steps.plan.outputs.plan_status == 'no-changes')
         run: |
           echo "📋 Bootstrap Summary" >> $GITHUB_STEP_SUMMARY
           echo "===================" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "✅ **OIDC Provider Created**" >> $GITHUB_STEP_SUMMARY
-          echo "✅ **IAM Role Created**" >> $GITHUB_STEP_SUMMARY
-          echo "✅ **Cloud Custodian Policies Attached**" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ steps.plan.outputs.plan_status }}" == "no-changes" ]; then
+            echo "✅ **Infrastructure Already Up-to-Date**" >> $GITHUB_STEP_SUMMARY
+            echo "✅ **OIDC Provider Exists**" >> $GITHUB_STEP_SUMMARY
+            echo "✅ **IAM Role Exists**" >> $GITHUB_STEP_SUMMARY
+            echo "✅ **Cloud Custodian Policies Attached**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ **OIDC Provider Created/Updated**" >> $GITHUB_STEP_SUMMARY
+            echo "✅ **IAM Role Created/Updated**" >> $GITHUB_STEP_SUMMARY
+            echo "✅ **Cloud Custodian Policies Attached**" >> $GITHUB_STEP_SUMMARY
+          fi
+          
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "## 🔑 GitHub Secret Configuration" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -247,13 +277,16 @@ jobs:
           echo "3. Start using Cloud Custodian policies with OIDC authentication" >> $GITHUB_STEP_SUMMARY
       
       - name: Save Bootstrap State Info
+        if: always() && (steps.plan.outputs.plan_status == 'changes-detected' || steps.plan.outputs.plan_status == 'no-changes')
         run: |
           echo "🏗️ Bootstrap completed on: $(date)" > bootstrap-info.txt
           echo "🔑 Role ARN: ${{ steps.role_arn.outputs.role_arn }}" >> bootstrap-info.txt
           echo "📍 AWS Region: ${{ env.AWS_REGION }}" >> bootstrap-info.txt
           echo "📦 Repository: ${{ github.repository }}" >> bootstrap-info.txt
+          echo "📊 Plan Status: ${{ steps.plan.outputs.plan_status }}" >> bootstrap-info.txt
       
       - name: Upload Bootstrap Info
+        if: always() && (steps.plan.outputs.plan_status == 'changes-detected' || steps.plan.outputs.plan_status == 'no-changes')
         uses: actions/upload-artifact@v4
         with:
           name: bootstrap-info
