@@ -41,71 +41,38 @@ All resources inherit from `c7n.query.QueryResourceManager`:
 - Mock cloud APIs with `unittest.mock` - never make real cloud calls in tests
 - Policy validation: `policy.validate()` for schema errors, `policy.run()` for execution
 
-### Infrastructure as Code Testing (`c7n_left`)
-Test policies against Terraform/CloudFormation:
-```bash
-c7n-left run -p policies/ -d terraform-module/ --summary
-```
+## Cloud Custodian — Copilot instructions (concise)
 
-## Build and Development Workflows
+Purpose: give an AI coding agent exactly the project-specific knowledge needed to be productive.
 
-### Core Commands
-- **Policy Execution**: `custodian run -s output/ policy.yml`
-- **Dry Run**: `custodian run --dryrun policy.yml`
-- **Schema Generation**: `custodian schema aws` (for provider-specific schemas)
-- **Multi-Account**: `c7n-org run -c accounts.yml -u policy.yml`
+## Big picture (what to open first)
+- Core engine: `c7n/` — policy parsing, schema, resource loading (`c7n/loader.py`, `c7n/structure.py`, `c7n/schema.py`).
+- Providers & tools: look under `tools/` (e.g. `tools/c7n_aws/`) and provider packages like `c7n_aws` or `c7n_azure` for resource implementations.
+- Policies and infra: `policies/` (policy YAMLs) and `terraform/` + `terraform-bootstrap/` (infra & bootstrapping scripts).
 
-### Serverless Deployment
-Policies with `mode` blocks auto-provision serverless functions:
-```yaml
-mode:
-  type: periodic
-  schedule: rate(1 day)
-  # Creates Lambda function with CloudWatch Events trigger
-```
+## Key, discoverable patterns (concrete)
+- Policies are YAML lists under a top-level `policies:` key. Example: `policies/example-policies.yml` uses `resource: aws.ec2` style names.
+- Resource modules inherit `c7n.query.QueryResourceManager`. Filters extend `c7n.filters.core.Filter`; actions extend `c7n.actions.core.Action` and implement `process()`.
+- Registration: resources are exposed via `@resources.register('name')` and looked up via `resource_map` strings (search `@resources.register` to find implementations).
+- Serverless packaging: `c7n/mu.py` builds deployment archives; runtime handler templates live near `c7n/handler.py`.
 
-### Docker Development
-Use `tools/cask/` for containerized execution:
-```bash
-custodian-cask run -s output/ policy.yml
-```
+## Developer workflows (how to run & test)
+- Run a policy locally: `custodian run -s output/ policy.yml` (project uses the `custodian` CLI installed in your environment).
+- Dry-run: `custodian run --dryrun policy.yml`.
+- Schema tooling: `custodian schema aws` generates provider schemas.
+- IaC testing: `c7n-left` is used to run policies against Terraform/CFN modules (see `tools/c7n_left`).
+- Tests: unit tests use `c7n.testing.CustodianTestCore` and helpers like `self.load_policy()` — open `tests/` to find examples.
 
-## Critical Implementation Details
+## Project conventions and gotchas
+- Policy files: must be `.yml`/`.yaml` and include `policies:`; many CI/checks assume that layout (see `policies/README.md`).
+- Sessions: providers expose session factories — do not assume global boto3 session; search for `get_session_factory`.
+- Naming: filter/action type names are schema-driven and case-sensitive; the string must match the schema registration.
+- Packaging limits: Lambda packages are trimmed in `c7n/mu.py` — adding heavy deps needs checks there.
 
-### Policy Loading Pipeline
-1. **YAML Parsing**: `c7n/loader.py` handles file loading and variable substitution
-2. **Structure Validation**: `c7n/structure.py` validates policy structure before schema
-3. **Schema Validation**: `c7n/schema.py` validates against provider schemas
-4. **Resource Loading**: `c7n/resources/` registers and loads provider resources
+## Where to look for examples when implementing changes
+- Policy parsing: `c7n/loader.py`, `c7n/structure.py`, `c7n/schema.py`.
+- Resource/filter/action examples: `c7n_aws` or `tools/c7n_aws` resource files (search `@resources.register`).
+- Packaging & serverless: `c7n/mu.py`, `c7n/handler.py`.
+- IaC tooling and bootstrap: `terraform/` and `terraform-bootstrap/` (scripts like `bootstrap.sh` and `bootstrap.tf`).
 
-### Lambda/Function Packaging
-- **Archive Creation**: `c7n/mu.py` creates deployment packages with dependencies
-- **Handler Template**: Each provider has handler template (e.g., `c7n/handler.py` for AWS)
-- **Configuration Injection**: Runtime config embedded as `config.json` in package
-
-### Multi-Provider Support
-- **Provider Discovery**: Use `c7n.provider.clouds.get()` to instantiate providers
-- **Resource Registration**: Providers register resources during import via decorators
-- **Session Management**: Each provider handles authentication and API clients
-
-## Essential File Patterns
-
-- **Policy Files**: Always end in `.yml` or `.yaml`, contain `policies:` key
-- **Resource Modules**: Follow `c7n_{provider}/c7n_{provider}/resources/{service}.py` pattern
-- **Test Files**: `test_{module}.py` with class inheritance from testing base classes
-- **Tool CLIs**: Entry points in `setup.py`, click-based command interfaces
-
-## Common Pitfalls
-
-1. **Schema Registration**: Forgot `@resources.register()` decorator breaks policy loading
-2. **Session Scope**: Don't cache sessions across regions - use session factories
-3. **Filter/Action Naming**: Must match schema definition exactly (case-sensitive)
-4. **Provider Loading**: Missing provider imports cause "unknown resource" errors
-5. **Lambda Limits**: Package size and dependency conflicts in serverless deployments
-
-## Integration Points
-
-- **Cloud APIs**: All cloud calls via provider-specific clients (boto3, Azure SDK, etc.)
-- **Metrics**: CloudWatch/Azure Monitor integration via `c7n.actions.metric`
-- **Notifications**: SNS/EventGrid via `c7n.actions.notify`
-- **Configuration**: YAML-based with variable interpolation and includes support
+If any section is unclear or you'd like me to add short examples (small patch) for one of the referenced files, tell me which part to expand. 
