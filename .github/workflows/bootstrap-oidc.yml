@@ -194,8 +194,13 @@ jobs:
         run: |
           echo "📋 Planning OIDC provider and IAM role creation..."
           echo "🔍 Terraform will show what resources will be created/updated/destroyed..."
+          
+          # Run terraform plan and capture exit code
+          set +e  # Don't exit on error
           terraform plan -detailed-exitcode -out=tfplan
           PLAN_EXIT_CODE=$?
+          set -e  # Re-enable exit on error
+          
           echo "plan_exit_code=$PLAN_EXIT_CODE" >> $GITHUB_OUTPUT
           
           if [ $PLAN_EXIT_CODE -eq 0 ]; then
@@ -209,7 +214,9 @@ jobs:
             echo "plan_status=failed" >> $GITHUB_OUTPUT
             exit $PLAN_EXIT_CODE
           fi
-        continue-on-error: false
+          
+          # Ensure step succeeds for valid exit codes (0 or 2)
+          exit 0
       
       - name: Terraform Apply
         if: steps.plan.outputs.plan_status == 'changes-detected' || steps.plan.outputs.plan_status == 'no-changes'
