@@ -53,8 +53,11 @@ jobs:
         run: |
           echo "📦 Installing Cloud Custodian..."
           pip install --upgrade pip
-          pip install c7n c7n-aws c7n-azure c7n-gcp
+          # Install Cloud Custodian with explicit version for stability
+          pip install 'c7n>=0.9.40'
           echo "✅ Cloud Custodian installed"
+          echo "📋 Installed version:"
+          pip show c7n
       
       - name: Verify Cloud Custodian Installation
         run: |
