@@ -126,8 +126,11 @@ jobs:
         id: plan
         run: |
           echo "🔍 Running Terraform plan..."
+          set +e  # Don't exit on non-zero exit codes
           terraform plan -detailed-exitcode -no-color -out=tfplan
           PLAN_EXIT_CODE=$?
+          set -e  # Re-enable exit on error
+          
           echo "exit_code=$PLAN_EXIT_CODE" >> $GITHUB_OUTPUT
           
           if [ $PLAN_EXIT_CODE -eq 0 ]; then
@@ -140,12 +143,14 @@ jobs:
           elif [ $PLAN_EXIT_CODE -eq 2 ]; then
             echo "📋 Changes detected - plan succeeded"
             echo "plan_result=changes" >> $GITHUB_OUTPUT
-            exit 0  # Explicitly exit with success
           else
             echo "❌ Unexpected exit code: $PLAN_EXIT_CODE"
             echo "plan_result=error" >> $GITHUB_OUTPUT
             exit 1
           fi
+          
+          # Always succeed this step for valid exit codes
+          exit 0
       
       - name: Save Plan Output
         id: plan_output
