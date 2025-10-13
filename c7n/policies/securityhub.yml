@@ -1,0 +1,63 @@
+vars:
+  tags: &tags
+    contact: devops@yourcompany.com
+    environment: "{environment}"
+    repo: devops/cloud-custodian/c7n
+  slack-notify: &slack-notify
+    slack_template: slack_default
+    slack_msg_color: danger
+    violation_desc:
+    to:
+      - https://hooks.slack.com/services/YOUR_SLACK_WORKSPACE/YOUR_SLACK_CHANNEL/YOUR_SLACK_TOKEN # cloud-custodian channel
+    transport:
+      type: sqs
+      queue: https://sqs.us-west-2.amazonaws.com/YOUR_AWS_ACCOUNT_ID/custodian-mailer-queue
+  email-notify: &email-notify
+    template: aws-basic_email.html
+    to:
+      - CloudAdmin@yourcompany.com
+      - event-owner
+      - resource-owner
+    transport:
+      type: sqs
+      queue: https://sqs.us-west-2.amazonaws.com/YOUR_AWS_ACCOUNT_ID/custodian-mailer-queue
+  audit-only-condition: &audit-only-condition # only run in audit account
+    - type: value
+      key: account_id
+      op: in
+      value: ["605289256863"]
+
+policies:
+  - name: aws-security-hub-critical-findings
+    resource: aws.securityhub-finding
+    conditions: 
+      *audit-only-condition
+    description: |
+      Notifies of new critical findings in Security Hub
+    mode:
+      type: periodic
+      schedule: cron(0, 10, *, *, ?, *) # every day at 10:00 UTC
+      role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+      tags: *tags
+    query:
+      - Filters:
+          SeverityLabel:
+            - Comparison: EQUALS
+              Value: CRITICAL
+          WorkflowStatus:
+            - Comparison: EQUALS
+              Value: NEW
+          RecordState:
+            - Comparison: EQUALS
+              Value: ACTIVE
+          # temporarily filter out findings from Amazon Inspector & SSM Patch Manager
+          ProductName:
+            - Comparison: NOT_EQUALS
+              Value: Inspector
+            - Comparison: NOT_EQUALS
+              Value: Systems Manager Patch Manager
+    actions:
+      - type: notify
+        <<: *slack-notify
+        slack_template: aws-securityhub-finding_slack
+        slack_msg_color: danger

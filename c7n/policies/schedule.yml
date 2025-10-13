@@ -1,0 +1,223 @@
+vars:
+  tags: &tags
+    contact: devops@yourcompany.com
+    environment: "{environment}"
+    repo: devops/cloud-custodian/c7n
+  slack-notify: &slack-notify
+    slack_template: slack_default
+    slack_msg_color: good
+    violation_desc:
+    to:
+      - https://hooks.slack.com/services/YOUR_SLACK_WORKSPACE/YOUR_SLACK_CHANNEL/YOUR_SLACK_TOKEN # cloud-custodian channel
+    transport:
+      type: sqs
+      queue: https://sqs.us-west-2.amazonaws.com/YOUR_AWS_ACCOUNT_ID/custodian-mailer-queue
+
+policies:
+  # RDS schedules
+  #  NOTE: RDS must use Unicode or custom schedule tags
+  #  https://cloudcustodian.io/docs/aws/examples/offhours.html#elasticbeanstalk-efs-and-other-services-with-tag-value-restrictions
+  - name: aws-rds-schedule-stop
+    resource: aws.rds
+    description: |
+      Stops RDS instances based on the c7n-schedule tag
+    mode:
+      type: periodic
+      schedule: rate(15 minutes) # runs every 15 minutes
+      role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+      tags: *tags
+    filters:
+      - type: offhour
+        tag: c7n-schedule
+        default_tz: utc
+        offhour: 1
+      - "DBInstanceStatus": "available"
+    actions:
+      - type: stop
+      - type: notify
+        <<: *slack-notify
+        slack_template: aws-rds-schedule_slack
+        action_desc: Resource has been STOPPED per the tagged c7n-schedule
+
+  - name: aws-rds-schedule-start
+    resource: aws.rds
+    description: |
+      Starts RDS instances based on the c7n-schedule tag
+    mode:
+      type: periodic
+      schedule: rate(15 minutes) # runs every 15 minutes
+      role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+      tags: *tags
+    filters:
+      - type: onhour
+        tag: c7n-schedule
+        default_tz: utc
+        onhour: 1
+      - "DBInstanceStatus": "stopped"
+      # hack: don't start instances that don't specify an on time
+      - type: value
+        key: tag:c7n-schedule
+        op: glob
+        value: "*on=*"
+    actions:
+      - type: start
+      - type: notify
+        <<: *slack-notify
+        slack_template: aws-rds-schedule_slack
+        action_desc: Resource has been STARTED per the tagged c7n-schedule
+
+  - name: aws-rds-cluster-schedule-stop
+    resource: aws.rds-cluster
+    description: |
+      Stops RDS clusters based on the c7n-schedule tag
+    mode:
+      type: periodic
+      schedule: rate(15 minutes) # runs every 15 minutes
+      role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+      tags: *tags
+    filters:
+      - type: offhour
+        tag: c7n-schedule
+        default_tz: utc
+        offhour: 1
+      - "Status": "available"
+    actions:
+      - type: stop
+      - type: notify
+        <<: *slack-notify
+        slack_template: aws-rds-cluster-schedule_slack
+        action_desc: Resource has been STOPPED per the tagged c7n-schedule
+
+  - name: aws-rds-cluster-schedule-start
+    resource: aws.rds
+    description: |
+      Starts RDS clusters based on the c7n-schedule tag
+    mode:
+      type: periodic
+      schedule: rate(15 minutes) # runs every 15 minutes
+      role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+      tags: *tags
+    filters:
+      - type: onhour
+        tag: c7n-schedule
+        default_tz: utc
+        onhour: 1
+      - "Status": "stopped"
+      # hack: don't start clusters that don't specify an on time
+      - type: value
+        key: tag:c7n-schedule
+        op: glob
+        value: "*on=*"
+    actions:
+      - type: start
+      - type: notify
+        <<: *slack-notify
+        slack_template: aws-rds-cluster-schedule_slack
+        action_desc: Resource has been STARTED per the tagged c7n-schedule
+
+# off=u28M-Fu2c10u29u3bon=u28M-Fu2c12u29u3btz=et
+
+  # EC2 schedules
+  - name: aws-ec2-schedule-stop
+    resource: aws.ec2
+    description: |
+      Stops EC2 instances based on the c7n-schedule tag
+    mode:
+      type: periodic
+      schedule: rate(15 minutes) # runs every 15 minutes
+      role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+      tags: *tags
+    filters:
+      - type: offhour
+        tag: c7n-schedule
+        default_tz: utc
+        offhour: 1
+      - "State.Name": "running"
+    actions:
+      - type: stop
+      - type: notify
+        <<: *slack-notify
+        slack_template: aws-ec2-schedule_slack
+        action_desc: Resource has been STOPPED per the tagged c7n-schedule
+
+  - name: aws-ec2-schedule-start
+    resource: aws.ec2
+    description: |
+      Starts EC2 instances based on the c7n-schedule tag
+    mode:
+      type: periodic
+      schedule: rate(15 minutes) # runs every 15 minutes
+      role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+      tags: *tags
+    filters:
+      - type: onhour
+        tag: c7n-schedule
+        default_tz: utc
+        onhour: 1
+      - "State.Name": "stopped"
+      # hack: don't start instances that don't specify an on time
+      - type: value
+        key: tag:c7n-schedule
+        op: glob
+        value: "*on=*"
+    actions:
+      - type: start
+      - type: notify
+        <<: *slack-notify
+        slack_template: aws-ec2-schedule_slack
+        action_desc: Resource has been STARTED per the tagged c7n-schedule
+
+  # ASG schedules
+  - name: aws-asg-schedule-stop
+    resource: aws.asg
+    description: |
+      Suspends ASG based on the c7n-schedule tag
+    mode:
+      type: periodic
+      schedule: rate(15 minutes) # runs every 15 minutes
+      role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+      tags: *tags
+    filters:
+      - type: offhour
+        tag: c7n-schedule
+        default_tz: utc
+        offhour: 1
+      - "tag:suspended-by-c7n-schedule": absent # ensure not already marked as suspended
+    actions:
+      - type: tag
+        key: suspended-by-c7n-schedule
+        value: "true"
+      - type: suspend
+      - type: notify
+        <<: *slack-notify
+        slack_template: aws-asg-schedule_slack
+        action_desc: Resource has been SUSPENDED per the tagged c7n-schedule
+
+  - name: aws-asg-schedule-start
+    resource: aws.asg
+    description: |
+      Resumes ASG based on the c7n-schedule tag
+    mode:
+      type: periodic
+      schedule: rate(15 minutes) # runs every 15 minutes
+      role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+      tags: *tags
+    filters:
+      - type: onhour
+        tag: c7n-schedule
+        default_tz: utc
+        onhour: 1
+      - "tag:suspended-by-c7n-schedule": present # ensure marked as suspended
+      # hack: don't resume ASG's that don't specify an on time
+      - type: value
+        key: tag:c7n-schedule
+        op: glob
+        value: "*on=*"
+    actions:
+      - type: untag
+        tags: ["suspended-by-c7n-schedule"]
+      - type: resume
+      - type: notify
+        <<: *slack-notify
+        slack_template: aws-asg-schedule_slack
+        action_desc: Resource has been RESUMED per the tagged c7n-schedule

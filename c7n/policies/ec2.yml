@@ -1,0 +1,137 @@
+vars:
+  tags: &tags
+    contact: devops@yourcompany.com
+    environment: "{environment}"
+    repo: devops/cloud-custodian/c7n
+  slack-notify: &slack-notify
+    slack_template: slack_default
+    slack_msg_color: danger
+    violation_desc:
+    to:
+      - https://hooks.slack.com/services/YOUR_SLACK_WORKSPACE/YOUR_SLACK_CHANNEL/YOUR_SLACK_TOKEN # cloud-custodian channel
+    transport:
+      type: sqs
+      queue: https://sqs.us-west-2.amazonaws.com/YOUR_AWS_ACCOUNT_ID/custodian-mailer-queue
+  email-notify: &email-notify
+    template: aws-basic_email.html
+    to:
+      - CloudAdmin@yourcompany.com
+      - event-owner
+      - resource-owner
+    transport:
+      type: sqs
+      queue: https://sqs.us-west-2.amazonaws.com/YOUR_AWS_ACCOUNT_ID/custodian-mailer-queue
+
+policies:
+  - name: aws-ec2-public-ips
+    resource: aws.ec2
+    description: |
+      Notifies of instances found with a public IP address
+    mode:
+      type: periodic
+      schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
+      role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+      tags: *tags
+    filters:
+      - type: value
+        key: PublicIpAddress
+        value: present
+    actions:
+      - type: notify
+        <<: *email-notify
+        subject: "[c7n] [{{ account }}] EC2 Instances With Public IP Report ({{ region }})"
+        violation_desc: EC2 instances with a public IP address
+        action_desc: |
+          No action taken. EC2 instances should be on private subnets.
+
+  - name: aws-ec2-stop-public-instances
+    resource: aws.ec2
+    description: |
+      Notifies of and stops EC2 instances launched in a public subnet
+    mode:
+      type: cloudtrail
+      events:
+        - RunInstances
+      role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+      tags: *tags
+    filters:
+      - type: event
+        key: detail.requestParameters.networkInterfaceSet.items[].associatePublicIpAddress
+        value: true
+    actions:
+      - type: stop
+        force: true
+      - type: notify
+        <<: *email-notify
+        priority_header: 1
+        subject: "[c7n] [{{ account }}] Public EC2 Instance Launched ({{ region }})"
+        violation_desc: EC2 instance launched in a public subnet
+        action_desc: |
+          Actions taken: The violating EC2 instance has been stopped. <br>
+          To expose an application or service publicly, a load balancer should be placed
+          in a public subnet which routes the traffic internally. <br>          
+          <a href="https://docs.aws.amazon.com/securityhub/latest/userguide/securityhub-standards-fsbp-controls.html#ec2-9-remediation">Documentation</a> 
+
+  # - name: aws-ec2-unused-security-groups
+  #   resource: aws.security-group
+  #   description: |
+  #     Notifies of unused security groups
+  #   mode:
+  #     type: periodic
+  #     schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
+  #     role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+  #     tags: *tags
+  #   filters:
+  #     - unused
+  #   actions:
+  #     - type: notify
+  #       <<: *email-notify
+  #       subject: "[c7n] [{{ account }}] Unused Security Group Report ({{ region }})"
+  #       violation_desc: Unused security groups
+  #       action_desc: |
+  #         No action taken. Unused security groups should be deleted.
+  
+  - name: aws-security-group-unsafe-ports 
+    resource: aws.security-group
+    description: |
+      Notifies of and remediates security group creation with unrestricted access over unsafe ports
+    mode:
+      type: cloudtrail
+      events:
+        - source: ec2.amazonaws.com
+          event: AuthorizeSecurityGroupIngress
+          ids: requestParameters.groupId
+        - source: ec2.amazonaws.com
+          event: AuthorizeSecurityGroupEgress
+          ids: requestParameters.groupId
+        - source: ec2.amazonaws.com
+          event: RevokeSecurityGroupEgress
+          ids: requestParameters.groupId
+        - source: ec2.amazonaws.com
+          event: RevokeSecurityGroupIngress
+          ids: requestParameters.groupId
+      role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+      tags: *tags
+    filters:
+      - or:
+        - type: ingress
+          Ports: [3389, 20, 23, 110, 143, 3306, 8080, 1433, 9200, 9300, 25, 445, 135, 21, 1434, 4333, 5432, 5500, 5601, 22, 3000, 5000, 8088, 8888]
+          Cidr:
+            value: "0.0.0.0/0"
+        - type: ingress
+          Ports: [3389, 20, 23, 110, 143, 3306, 8080, 1433, 9200, 9300, 25, 445, 135, 21, 1434, 4333, 5432, 5500, 5601, 22, 3000, 5000, 8088, 8888]
+          CidrV6:
+            value: "::/0"
+    actions:
+      - type: remove-permissions
+        ingress: matched
+      - type: notify
+        <<: *email-notify
+        priority_header: 1
+        subject: "[c7n] [{{ account }}] Open Security Group Rule Created ({{ region }})"
+        violation_desc: Security group with rules open to the world
+        action_desc: |
+          Actions taken: The violating security group rule has been removed as it typically allows 
+          direct incoming public internet traffic access to your resource. This violates AWS 
+          security best practice. <br>          
+          <a href="https://docs.aws.amazon.com/securityhub/latest/userguide/securityhub-standards-fsbp-controls.html#ec2-19-remediation">Documentation</a> 

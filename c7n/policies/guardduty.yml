@@ -1,0 +1,107 @@
+vars:
+  tags: &tags
+    contact: devops@yourcompany.com
+    environment: "{environment}"
+    repo: devops/cloud-custodian/c7n
+  slack-notify: &slack-notify
+    slack_template: slack_default
+    slack_msg_color: danger
+    violation_desc:
+    to:
+      - https://hooks.slack.com/services/YOUR_SLACK_WORKSPACE/YOUR_SLACK_CHANNEL/YOUR_SLACK_TOKEN # cloud-custodian channel
+    transport:
+      type: sqs
+      queue: https://sqs.us-west-2.amazonaws.com/YOUR_AWS_ACCOUNT_ID/custodian-mailer-queue
+  email-notify: &email-notify
+    template: aws-basic_email.html
+    to:
+      - CloudAdmin@yourcompany.com
+      - event-owner
+      - resource-owner
+    transport:
+      type: sqs
+      queue: https://sqs.us-west-2.amazonaws.com/YOUR_AWS_ACCOUNT_ID/custodian-mailer-queue
+  audit-only-condition: &audit-only-condition # only run in audit account
+    - type: value
+      key: account_id
+      op: in
+      value: ["605289256863"]
+
+policies:
+  - name: aws-guarduty-account-new-finding
+    resource: account
+    conditions: 
+      *audit-only-condition
+    description: |
+      Notifies of new account findings in GuardDuty
+    mode:
+      type: guard-duty
+      role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+      tags: *tags
+    filters:
+      - type: event
+        key: detail.severity
+        op: gte
+        value: 4.5 # medium and high severity
+    actions:
+      - type: notify
+        <<: *slack-notify
+        slack_template: aws-guardduty-finding_slack
+        slack_msg_color: danger
+        violation_desc: |
+          New GuardDuty finding received - Account
+        action_desc: |
+          Please investigate.
+          More details can be found in the Audit account: https://us-west-2.console.aws.amazon.com/guardduty/
+
+  - name: aws-guarduty-iam-user-new-finding
+    resource: iam-user
+    conditions: 
+      *audit-only-condition
+    description: |
+      Notifies of new IAM user findings in GuardDuty
+    mode:
+      type: guard-duty
+      role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+      tags: *tags
+    filters:
+      - type: event
+        key: detail.severity
+        op: gte
+        value: 4.5 # medium and high severity
+    actions:
+      - type: notify
+        <<: *slack-notify
+        slack_template: aws-guardduty-finding_slack
+        slack_msg_color: danger
+        violation_desc: |
+          New GuardDuty finding received - IAM user
+        action_desc: |
+          Please investigate.
+          More details can be found in the Audit account: https://us-west-2.console.aws.amazon.com/guardduty/
+
+  - name: aws-guarduty-ec2-new-finding
+    resource: ec2
+    conditions: 
+      *audit-only-condition
+    description: |
+      Notifies of new EC2 findings in GuardDuty
+    mode:
+      type: guard-duty
+      role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+      tags: *tags
+    filters:
+      - type: event
+        key: detail.severity
+        op: gte
+        value: 4.5 # medium and high severity
+    actions:
+      - type: notify
+        <<: *slack-notify
+        slack_template: aws-guardduty-finding_slack
+        slack_msg_color: danger
+        violation_desc: |
+          New GuardDuty finding received - EC2
+        action_desc: |
+          Please investigate.
+          More details can be found in the Audit account: https://us-west-2.console.aws.amazon.com/guardduty/

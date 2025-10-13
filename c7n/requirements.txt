@@ -1,0 +1,6 @@
+c7n>=0.9.21,<1.0
+c7n-mailer>=0.6.20,<1.0
+c7n-org>=0.6.20,<1.0
+c7n-policystream>=0.4.20,<1.0
+jinja2
+yq

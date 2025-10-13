@@ -1,0 +1,18 @@
+# Baseline policies to get an inventory of all resources
+# This can be used to calculated percentages of non-compliant resources
+
+policies: []
+
+# policies:
+#   - name: aws-baseline-s3
+#     resource: aws.s3
+#     description: |
+#       Pulls full S3 inventory
+#     mode:
+#       type: periodic
+#       schedule: rate(1 day)
+#       role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+#       tags:
+#         contact: devops@yourcompany.com
+#         environment: "{environment}"
+#         repo: devops/cloud-custodian

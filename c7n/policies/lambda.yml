@@ -1,0 +1,155 @@
+vars:
+  tags: &tags
+    contact: devops@yourcompany.com
+    environment: "{environment}"
+    repo: devops/cloud-custodian/c7n
+  slack-notify: &slack-notify
+    slack_template: slack_default
+    slack_msg_color: danger
+    violation_desc:
+    to:
+      - https://hooks.slack.com/services/YOUR_SLACK_WORKSPACE/YOUR_SLACK_CHANNEL/YOUR_SLACK_TOKEN # cloud-custodian channel
+    transport:
+      type: sqs
+      queue: https://sqs.us-west-2.amazonaws.com/YOUR_AWS_ACCOUNT_ID/custodian-mailer-queue
+  email-notify: &email-notify
+    template: aws-basic_email.html
+    to:
+      - CloudAdmin@yourcompany.com
+      - event-owner
+      - resource-owner
+    transport:
+      type: sqs
+      queue: https://sqs.us-west-2.amazonaws.com/YOUR_AWS_ACCOUNT_ID/custodian-mailer-queue
+
+# LAMBDA RUNTIME DEPRECATION DATES
+#  https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html
+# nodejs18.x - Jul 31, 2025
+# python3.9 - Dec 15, 2025
+
+
+policies:
+  - name: aws-lambda-deprecated-runtimes
+    resource: aws.lambda
+    description: |
+      Notifies of Lambda functions using deprecated runtimes
+    mode:
+      type: periodic
+      schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
+      role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+      tags: *tags
+    filters:
+      - type: value
+        key: Runtime
+        value: [nodejs, dotnetcore2.0, dotnetcore1.0, nodejs6.10, nodejs4.3-edge, nodejs4.3, nodejs8.10, python2.7, ruby2.5, nodejs10.x, dotnetcore2.1, dotnet5.0, python3.6, nodejs12.x, dotnetcore3.1, python3.7, nodejs14.x, ruby2.7, provided, go1.x, java8, dotnet6, dotnet7, nodejs16.x, python3.8]
+        op: in
+      # exclude controltower lambda functions
+      - not:
+        - type: value
+          key: FunctionName
+          op: regex
+          value: '(aws-controltower)-\w+'
+          value_type: normalize
+    actions:
+      - type: notify
+        <<: *email-notify
+        subject: "[c7n] [{{ account }}] Lambda Functions Using Deprecated Runtimes Report ({{ region }})"
+        violation_desc: Lambda functions configured to use a deprecated runtime
+        action_desc: |
+          No action taken. Functions MUST be updated to the latest runtime.<br>
+          These functions can no longer be updated and are not receiving security patches.<br>
+          <a href="https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html">Documentation</a>
+
+  - name: aws-lambda-outdated-runtimes
+    resource: aws.lambda
+    description: |
+      Notifies of Lambda functions using oudated runtimes that will be deprecated soon
+    mode:
+      type: periodic
+      schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
+      role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+      tags: *tags
+    filters:
+      - type: value
+        key: Runtime
+        value: [nodejs18.x, python3.9]
+        op: in
+      # exclude controltower lambda functions
+      - not:
+        - type: value
+          key: FunctionName
+          op: regex
+          value: '(aws-controltower)-\w+'
+          value_type: normalize
+    actions:
+      - type: notify
+        <<: *email-notify
+        subject: "[c7n] [{{ account }}] Lambda Functions Using Outdated Runtimes Report ({{ region }})"
+        violation_desc: Lambda functions configured to use an outdated runtime that will be deprecated soon
+        action_desc: |
+          No action taken. Functions should be updated to the latest runtime.<br>
+          These functions are nearing deprecation within the next 6 months. They will soon no longer receive security patches.<br>
+          Once Phase 2 deprecation ends, they will additionally no longer be able to be updated.<br>
+          <a href="https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html">Documentation</a>
+  - name: aws-lambda-outdated-runtime-creation
+    resource: aws.lambda
+    description: |
+      Notify when a Lambda function is created with an outdated runtime.
+    mode:
+      type: cloudtrail
+      role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+      events:
+        - CreateFunction
+    filters:
+      - type: value
+        key: Runtime
+        value: [nodejs18.x]
+        op: in
+    actions:
+      - type: notify
+        <<: *email-notify
+        subject: "[c7n] [{{ account }}] Lambda Function Created with Outdated Runtime ({{ region }})"
+        violation_desc: Lambda function Created with outdated runtime
+        action_desc: |
+          Functions should be created using a runtime that is not pending deprecation.<br>
+          These runtimes will soon no longer receive security patches.<br>
+          <a href="https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html">Documentation</a>
+      #- type: delete
+  - name: aws-lambda-unused-functions
+    resource: aws.lambda
+    description: |
+      Notifies of Lambda functions appear to be unused.
+    mode:
+      type: periodic
+      schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
+      role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+      tags: *tags
+    filters:
+      # not invoked in last year
+      - type: metrics
+        name: Invocations
+        op: equal
+        statistics: Sum
+        days: 365
+        value: 0
+        missing-value: 0
+      # not modified in last 6 months
+      - type: value
+        key: LastModified
+        op: gt
+        value: 183
+        value_type: age
+      # exclude c7n lambda functions
+      - not:
+        - type: value
+          key: FunctionName
+          op: regex
+          value: '(custodian)-\w+'
+          value_type: normalize
+    actions:
+      - type: notify
+        <<: *email-notify
+        subject: "[c7n] [{{ account }}] Lambda Functions are unused ({{ region }})"
+        violation_desc: Lambda Functions that appear to be unused
+        action_desc: |
+          No action taken. Please delete if not needed.

@@ -1,0 +1,713 @@
+# https://cloudcustodian.io/docs/aws/examples/tagcompliance.html
+# https://cloudcustodian.io/docs/tools/c7n-trailcreator.html
+# https://cloudcustodian.io/docs/aws/examples/ec2-auto-tag-user.html
+
+vars:
+  tags: &tags
+    contact: devops@yourcompany.com
+    environment: "{environment}"
+    repo: devops/cloud-custodian/c7n
+  slack-notify: &slack-notify
+    slack_template: slack_default
+    slack_msg_color: danger
+    violation_desc:
+    to:
+      - https://hooks.slack.com/services/YOUR_SLACK_WORKSPACE/YOUR_SLACK_CHANNEL/YOUR_SLACK_TOKEN # cloud-custodian channel
+    transport:
+      type: sqs
+      queue: https://sqs.us-west-2.amazonaws.com/YOUR_AWS_ACCOUNT_ID/custodian-mailer-queue
+  auto-tag: &auto-tag
+    filters:
+      - tag:c7n:created-by: absent
+    actions:
+      - type: auto-tag-user
+        tag: 'c7n:created-by'
+        principal_id_tag: 'c7n:created-by-principal'
+  temp-condition: &temp-condition # only run in shared account
+    - type: value
+      key: account_id
+      op: in
+      value: ["YOUR_AWS_ACCOUNT_ID"]
+
+
+policies:
+- name: aws-acm-auto-tag-user
+  resource: aws.acm-certificate
+  description: |
+    Auto-tags ACM resources with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - source: acm.amazonaws.com
+        event: RequestCertificate
+        ids: requestParameters.domainName
+    tags: *tags
+  <<: *auto-tag
+
+- name: aws-ami-auto-tag-user
+  resource: aws.ami
+  description: |
+    Auto-tags AMI resources with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - source: ec2.amazonaws.com
+        event: CreateImage
+        ids: requestParameters.imageId
+    tags: *tags
+  <<: *auto-tag
+
+- name: aws-asg-auto-tag-user
+  resource: aws.asg
+  description: |
+    Auto-tags ASG resources with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - CreateAutoScalingGroup
+    tags: *tags
+  <<: *auto-tag
+
+- name: aws-api-auto-tag-user
+  resource: aws.rest-api
+  description: |
+    Auto-tags API Gateway REST API resources with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - source: apigateway.amazonaws.com
+        event: CreateRestApi
+        ids: responseElements.restapiResources.restApiId
+    tags: *tags
+  <<: *auto-tag
+
+- name: aws-cfn-auto-tag-user
+  resource: aws.cfn
+  description: |
+    Auto-tags Cloud Formation resources with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - source: cloudformation.amazonaws.com
+        event: CreateStack
+        ids: responseElements.stackId
+    tags: *tags
+  <<: *auto-tag
+
+- name: aws-cloudtrail-auto-tag-user
+  resource: aws.cloudtrail
+  description: |
+    Auto-tags CloudTrail resources with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - source: cloudtrail.amazonaws.com
+        event: CreateTrail
+        ids: responseElements.name
+    tags: *tags
+  <<: *auto-tag
+
+- name: aws-cloudfront-auto-tag-user
+  resource: aws.distribution
+  description: |
+    Auto-tags CloudFront resources with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - source: cloudfront.amazonaws.com
+        event: CreateDistribution
+        ids: responseElements.distribution.id
+    tags: *tags
+  <<: *auto-tag
+
+- name: aws-dynamodb-auto-tag-user
+  resource: aws.dynamodb-table
+  description: |
+    Auto-tags DynamoDB resources with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - source: dynamodb.amazonaws.com
+        event: CreateGlobalTable
+        ids: requestParameters.globalTableName
+      - source: dynamodb.amazonaws.com
+        event: CreateTable
+        ids: requestParameters.tableName
+    tags: *tags
+  <<: *auto-tag
+
+- name: aws-ec2-auto-tag-user
+  resource: aws.ec2
+  description: |
+    Auto-tags EC2 resources with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - RunInstances
+    tags: *tags
+  <<: *auto-tag
+
+- name: aws-ecr-auto-tag-user
+  resource: aws.ecr
+  description: |
+    Auto-tags ECR resources with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - source: ecr.amazonaws.com
+        event: CreateRepository
+        ids: responseElements.repository.repositoryName
+    tags: *tags
+  <<: *auto-tag
+
+- name: aws-ecs-cluster-auto-tag-user
+  resource: aws.ecs
+  description: |
+    Auto-tags ECS cluster resources with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - source: ecs.amazonaws.com
+        event: CreateCluster
+        ids: responseElements.cluster.clusterName
+    tags: *tags
+  <<: *auto-tag
+
+- name: aws-ecs-service-auto-tag-user
+  resource: aws.ecs-service
+  description: |
+    Auto-tags ECS service resources with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - source: ecs.amazonaws.com
+        event: CreateService
+        ids: responseElements.service.serviceArn
+    tags: *tags
+  <<: *auto-tag
+
+- name: aws-ecs-task-definition-auto-tag-user
+  resource: aws.ecs-task-definition
+  description: |
+    Auto-tags ECS service resources with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - source: ecs.amazonaws.com
+        event: RegisterTaskDefinition
+        ids: responseElements.taskDefinition.taskDefinitionArn
+    tags: *tags
+  <<: *auto-tag
+
+- name: aws-efs-auto-tag-user
+  resource: aws.efs
+  description: |
+    Auto-tags EFS resources with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - source: elasticfilesystem.amazonaws.com
+        event: CreateFileSystem
+        ids: responseElements.fileSystemArn
+    tags: *tags
+  <<: *auto-tag
+
+- name: aws-elastic-ip-auto-tag-user
+  resource: aws.elastic-ip
+  description: |
+    Auto-tags Elastic IP with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - source: ec2.amazonaws.com
+        event: AllocateAddress
+        ids: responseElements.allocationId
+    tags: *tags
+  <<: *auto-tag
+
+- name: aws-eni-auto-tag-user
+  resource: aws.eni
+  description: |
+    Auto-tags Elastic Network Interface with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - source: ec2.amazonaws.com
+        event: CreateNetworkInterface
+        ids: responseElements.networkInterface.networkInterfaceId
+    tags: *tags
+  <<: *auto-tag
+
+- name: aws-ebs-volume-auto-tag-user
+  resource: aws.ebs
+  description: |
+    Auto-tags EBS volume with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - source: ec2.amazonaws.com
+        event: CreateVolume
+        ids: responseElements.VolumeId
+    tags: *tags
+  <<: *auto-tag
+
+- name: aws-ebs-snapshot-auto-tag-user
+  resource: aws.ebs-snapshot
+  description: |
+    Auto-tags EBS snapshot with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - source: ec2.amazonaws.com
+        event: CreateSnapshot
+        ids: responseElements.snapshotId
+    tags: *tags
+  <<: *auto-tag
+
+- name: aws-elasticache-cluster-auto-tag-user
+  resource: aws.cache-cluster
+  description: |
+    Auto-tags Elasticache cluster resources with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - source: elasticache.amazonaws.com
+        event: CreateCacheCluster
+        ids: requestParameters.cacheClusterId
+    tags: *tags
+  <<: *auto-tag
+
+- name: aws-elasticache-snapshot-auto-tag-user
+  resource: aws.cache-snapshot
+  description: |
+    Auto-tags Elasticache snapshot resources with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - source: elasticache.amazonaws.com
+        event: CreateSnapshot
+        ids: responseElements.SnapshotName
+    tags: *tags
+  <<: *auto-tag
+
+- name: aws-elasticsearch-auto-tag-user
+  resource: aws.elasticsearch
+  description: |
+    Auto-tags ElasticSearch resources with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - source: es.amazonaws.com
+        event: CreateElasticsearchDomain
+        ids: requestParameters.domainName
+    tags: *tags
+  <<: *auto-tag
+
+- name: aws-alb-auto-tag-user
+  resource: aws.app-elb
+  description: |
+    Auto-tags ALB resources with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      # target load balancers
+      - source: elasticloadbalancing.amazonaws.com
+        event: CreateLoadBalancer
+        ids: responseElements.loadBalancers[].loadBalancerArn
+    tags: *tags
+  <<: *auto-tag
+
+- name: aws-igw-auto-tag-user
+  resource: aws.internet-gateway
+  description: |
+    Auto-tags Internet Gateway resources with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - source: ec2.amazonaws.com
+        event: CreateInternetGateway
+        ids: responseElements.internetGateway.internetGatewayId
+    tags: *tags
+  <<: *auto-tag
+
+- name: aws-iam-role-auto-tag-user
+  conditions:
+    - region: us-east-1 # global resource
+  resource: aws.iam-role
+  description: |
+    Auto-tags IAM role resources with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - source: iam.amazonaws.com
+        event: CreateRole
+        ids: responseElements.role.roleName
+    tags: *tags
+  <<: *auto-tag
+
+- name: aws-iam-policy-auto-tag-user
+  conditions:
+    - region: us-east-1 # global resource
+  resource: aws.iam-policy
+  description: |
+    Auto-tags IAM policy resources with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - source: iam.amazonaws.com
+        event: CreatePolicy
+        ids: responseElements.policy.arn
+    tags: *tags
+  <<: *auto-tag
+
+- name: aws-iam-user-auto-tag-user
+  conditions:
+    - region: us-east-1 # global resource
+  resource: aws.iam-user
+  description: |
+    Auto-tags IAM user resources with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - source: iam.amazonaws.com
+        event: CreateUser
+        ids: responseElements.user.userName
+    tags: *tags
+  <<: *auto-tag
+
+- name: aws-key-pair-auto-tag-user
+  resource: aws.key-pair
+  description: |
+    Auto-tags key pair resources with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - source: ec2.amazonaws.com
+        event: CreateKeyPair
+        ids: responseElements.keyName
+    tags: *tags
+  <<: *auto-tag
+
+- name: aws-kms-key-auto-tag-user
+  resource: aws.kms-key
+  description: |
+    Auto-tags KMS key resources with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - source: kms.amazonaws.com
+        event: CreateKey
+        ids: responseElements.keyMetadata.keyId
+    tags: *tags
+  <<: *auto-tag
+
+- name: aws-lambda-auto-tag-user
+  resource: aws.lambda
+  description: |
+    Auto-tags Lambda resources with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - source: lambda.amazonaws.com
+        event: CreateFunction20150331
+        ids: requestParameters.functionName
+      - source: lambda.amazonaws.com
+        event: CreateFunction
+        ids: responseElements.functionName
+    tags: *tags
+  <<: *auto-tag
+
+- name: aws-cloudwatch-log-group-auto-tag-user
+  resource: aws.log-group
+  description: |
+    Auto-tags CloudWatch log group resources with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - source: logs.amazonaws.com
+        event: CreateLogGroup
+        ids: requestParameters.logGroupName
+    tags: *tags
+  <<: *auto-tag
+
+- name: aws-nat-gateway-auto-tag-user
+  resource: aws.nat-gateway
+  description: |
+    Auto-tags NAT Gateway resources with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - source: ec2.amazonaws.com
+        event: CreateNatGateway
+        ids: responseElements.CreateNatGatewayResponse.natGateway.natGatewayId
+    tags: *tags
+  <<: *auto-tag
+
+- name: aws-nacl-auto-tag-user
+  resource: aws.network-acl
+  description: |
+    Auto-tags Network ACL resources with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - source: ec2.amazonaws.com
+        event: CreateNatGateway
+        ids: responseElements.CreateNetworkAclResponse.networkAcl.networkAclId
+    tags: *tags
+  <<: *auto-tag
+
+- name: aws-peering-connection-auto-tag-user
+  resource: aws.peering-connection
+  description: |
+    Auto-tags VPC peering connection resources with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - source: ec2.amazonaws.com
+        event: CreateVpcPeeringConnection
+        ids: responseElements.vpcPeeringConnection.vpcPeeringConnectionId
+    tags: *tags
+  <<: *auto-tag
+
+- name: aws-rds-instance-auto-tag-user
+  resource: aws.rds
+  description: |
+    Auto-tags RDS instance resources with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - source: rds.amazonaws.com
+        event: CreateDBInstance
+        ids: requestParameters.dbInstanceIdentifier
+    tags: *tags
+  <<: *auto-tag
+
+- name: aws-rds-snapshot-auto-tag-user
+  resource: aws.rds-snapshot
+  description: |
+    Auto-tags RDS snapshot resources with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - source: rds.amazonaws.com
+        event: CreateDBSnapshot
+        ids: requestParameters.dbSnapshotIdentifier
+    tags: *tags
+  <<: *auto-tag
+
+- name: aws-rds-parameter-group-auto-tag-user
+  resource: aws.rds-param-group
+  description: |
+    Auto-tags RDS parameter group resources with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - source: rds.amazonaws.com
+        event: CreateDBParameterGroup
+        ids: requestParameters.dbParameterGroupName
+    tags: *tags
+  <<: *auto-tag
+
+- name: aws-rds-subnet-group-auto-tag-user
+  resource: aws.rds-subnet-group
+  description: |
+    Auto-tags RDS subnet group resources with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - source: rds.amazonaws.com
+        event: CreateDBSubnetGroup
+        ids: requestParameters.dbSubnetGroupName
+    tags: *tags
+  <<: *auto-tag
+
+- name: aws-route-table-auto-tag-user
+  resource: aws.route-table
+  description: |
+    Auto-tags VPC route-table resources with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - source: ec2.amazonaws.com
+        event: CreateRouteTable
+        ids: responseElements.routeTable.routeTableId
+    tags: *tags
+  <<: *auto-tag
+
+- name: aws-ssm-parameter-group-auto-tag-user
+  resource: aws.ssm-parameter
+  description: |
+    Auto-tags SSM parameter resources with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - source: ssm.amazonaws.com
+        event: PutParameter
+        ids: requestParameters.name
+    tags: *tags
+  <<: *auto-tag
+
+- name: aws-secrets-manager-group-auto-tag-user
+  resource: aws.secrets-manager
+  description: |
+    Auto-tags Secrets Manager resources with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - source: secretsmanager.amazonaws.com
+        event: CreateSecret
+        ids: requestParameters.name
+    tags: *tags
+  <<: *auto-tag
+
+- name: aws-security-group-group-auto-tag-user
+  resource: aws.security-group
+  description: |
+    Auto-tags Security Group resources with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - source: ec2.amazonaws.com
+        event: CreateSecurityGroup
+        ids: responseElements.groupId
+    tags: *tags
+  <<: *auto-tag
+
+- name: aws-s3-auto-tag-user
+  resource: aws.s3
+  description: |
+    Auto-tags S3 resources with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - source: s3.amazonaws.com
+        event: CreateBucket
+        ids: requestParameters.bucketName
+    tags: *tags
+  <<: *auto-tag
+
+- name: aws-sns-auto-tag-user
+  resource: aws.sns
+  description: |
+    Auto-tags SNS resources with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - source: sns.amazonaws.com
+        event: CreateTopic
+        ids: requestParameters.name
+    tags: *tags
+  <<: *auto-tag
+
+- name: aws-sqs-auto-tag-user
+  resource: aws.sqs
+  description: |
+    Auto-tags SQS resources with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - source: sqs.amazonaws.com
+        event: CreateQueue
+        ids: requestParameters.queueName
+    tags: *tags
+  <<: *auto-tag
+
+- name: aws-subnet-auto-tag-user
+  resource: aws.subnet
+  description: |
+    Auto-tags VPC subnet resources with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - source: ec2.amazonaws.com
+        event: CreateSubnet
+        ids: responseElements.subnet.subnetId
+    tags: *tags
+  <<: *auto-tag
+
+- name: aws-tgw-auto-tag-user
+  resource: aws.transit-gateway
+  description: |
+    Auto-tags Transit Gateway resources with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - source: ec2.amazonaws.com
+        event: CreateTransitGateway
+        ids: responseElements.CreateTransitGatewayResponse.TransitGateway.transitGatewayId
+    tags: *tags
+  <<: *auto-tag
+
+- name: aws-vpc-auto-tag-user
+  resource: aws.vpc
+  description: |
+    Auto-tags VPC resources with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - source: ec2.amazonaws.com
+        event: CreateVpc
+        ids: responseElements.vpc.vpcId
+    tags: *tags
+  <<: *auto-tag
+  
+- name: aws-route53-auto-tag-user
+  resource: aws.hostedzone
+  description: |
+    Auto-tags Route53 HostedZone resources with creator info
+  mode:
+    type: cloudtrail
+    role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+    events:
+      - source: route53.amazonaws.com
+        event: CreateHostedZone
+        ids: responseElements.hostedZone.id
+    tags: *tags
+  <<: *auto-tag   

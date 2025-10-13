@@ -1,0 +1,69 @@
+vars:
+  tags: &tags
+    contact: devops@yourcompany.com
+    environment: "{environment}"
+    repo: devops/cloud-custodian/c7n
+  slack-notify: &slack-notify
+    slack_template: slack_default
+    slack_msg_color: danger
+    violation_desc:
+    to:
+      - https://hooks.slack.com/services/YOUR_SLACK_WORKSPACE/YOUR_SLACK_CHANNEL/YOUR_SLACK_TOKEN # cloud-custodian channel
+    transport:
+      type: sqs
+      queue: https://sqs.us-west-2.amazonaws.com/YOUR_AWS_ACCOUNT_ID/custodian-mailer-queue
+  email-notify: &email-notify
+    template: aws-basic_email.html
+    to:
+      - CloudAdmin@yourcompany.com
+      - event-owner
+      - resource-owner
+    transport:
+      type: sqs
+      queue: https://sqs.us-west-2.amazonaws.com/YOUR_AWS_ACCOUNT_ID/custodian-mailer-queue
+
+policies:
+  - name: aws-s3-no-encryption
+    conditions:
+      - region: us-east-1 # global resource
+    resource: aws.s3
+    description: |
+      Notifies of S3 buckets without encyrption enabled
+    mode:
+      type: periodic
+      schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
+      role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+      tags: *tags
+    filters:
+      - type: bucket-encryption
+        state: False
+    actions:
+      - type: notify
+        <<: *email-notify
+        subject: "[c7n] [{{ account }}] S3 Buckets Without Encryption Report ({{ region }})"
+        violation_desc: S3 buckets without encryption enabled
+        action_desc: |
+          No action taken. Encryption should be added to buckets.<br>
+          <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucket-encryption.html">Documentation</a>
+
+  - name: aws-s3-public-access
+    conditions:
+      - region: us-east-1 # global resource
+    resource: aws.s3
+    description: |
+      Notifies of S3 buckets that do not have public access fully restricted
+    mode:
+      type: periodic
+      schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
+      role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+      tags: *tags
+    filters:
+      - type: check-public-block
+    actions:
+      - type: notify
+        <<: *email-notify
+        subject: "[c7n] [{{ account }}] S3 Buckets Potential Public Access Report ({{ region }})"
+        violation_desc: S3 buckets with potential public access
+        action_desc: |
+          No action taken. S3 bucket public access should be fully restricted.<br>
+          <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/access-control-block-public-access.html">Documentation</a>
