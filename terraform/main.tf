@@ -103,7 +103,6 @@ resource "aws_sns_topic" "custodian_notifications" {
 
   # Temporarily removed tags due to permission issues
   # Will be added back after IAM permissions are updated
-  }
 }
 
 # Lambda execution role for Cloud Custodian serverless policies
