@@ -115,6 +115,9 @@ resource "aws_iam_policy" "cloud_custodian_policy" {
           "s3:PutBucketPolicy",
           "s3:PutBucketVersioning",
           "s3:DeleteObject",
+          "s3:PutBucketTagging",
+          "s3:GetBucketTagging",
+          "s3:DeleteBucketTagging",
           
           # Lambda permissions for serverless policies
           "lambda:CreateFunction",
@@ -148,6 +151,9 @@ resource "aws_iam_policy" "cloud_custodian_policy" {
           "logs:PutLogEvents",
           "logs:GetLogEvents",
           "logs:FilterLogEvents",
+          "logs:TagResource",
+          "logs:UntagResource",
+          "logs:ListTagsLogGroup",
           
           # IAM permissions for Lambda execution roles
           "iam:CreateRole",
@@ -161,6 +167,16 @@ resource "aws_iam_policy" "cloud_custodian_policy" {
           "iam:GetRolePolicy",
           "iam:ListRolePolicies",
           "iam:ListAttachedRolePolicies",
+          "iam:CreatePolicy",
+          "iam:DeletePolicy",
+          "iam:GetPolicy",
+          "iam:ListPolicies",
+          "iam:TagRole",
+          "iam:UntagRole",
+          "iam:ListRoleTags",
+          "iam:TagPolicy",
+          "iam:UntagPolicy",
+          "iam:ListPolicyTags",
           
           # SNS for notifications
           "sns:CreateTopic",
@@ -171,6 +187,9 @@ resource "aws_iam_policy" "cloud_custodian_policy" {
           "sns:Subscribe",
           "sns:Unsubscribe",
           "sns:SetTopicAttributes",
+          "sns:TagResource",
+          "sns:UntagResource",
+          "sns:ListTagsForResource",
           
           # SQS for message queuing
           "sqs:CreateQueue",
