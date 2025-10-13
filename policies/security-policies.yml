@@ -2,15 +2,13 @@ policies:
   # Daily security check: Public S3 buckets
   - name: s3-public-buckets
     description: |
-      Find S3 buckets that are publicly readable or writable.
+      Find S3 buckets that are publicly accessible.
       This is a critical security issue that needs immediate attention.
     resource: aws.s3
     filters:
-      # Bucket allows public read
-      - type: bucket-public-access-block
+      # Check if public access block is disabled
+      - type: check-public-block
         BlockPublicAcls: false
-      - type: bucket-public-access-block
-        BlockPublicPolicy: false
     actions:
       # Immediately block public access
       - type: set-public-access-block
@@ -77,17 +75,14 @@ policies:
   # Monitor CloudTrail configuration
   - name: cloudtrail-not-enabled
     description: |
-      Ensure CloudTrail is enabled for audit logging.
+      Find CloudTrail trails that are not logging or not configured properly.
       This is required for compliance and security monitoring.
-    resource: aws.account
+    resource: aws.cloudtrail
     filters:
-      # Check if CloudTrail is configured
-      - type: check-cloudtrail
-        global-events: true
-        multi-region: true
-        running: true
+      # Trail is not logging
+      - "IsLogging": false
     actions:
-      # This would typically trigger an alert
+      # Tag for urgent review
       - type: tag
         key: ComplianceAlert
-        value: CloudTrailNotConfigured
+        value: CloudTrailNotLogging

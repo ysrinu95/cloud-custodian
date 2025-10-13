@@ -15,17 +15,17 @@ policies:
       - type: tag
         key: ComplianceStatus
         value: NonCompliant-MissingTags
-      # Notify via SNS (if topic exists)
-      - type: notify
-        template: default
-        priority_header: '1'
-        subject: 'Cloud Custodian: Untagged EC2 Instance Found'
-        to:
-          - resource-owner
-        transport:
-          type: sns
-          topic: arn:aws:sns:us-east-1:172327596604:cloud-custodian-notifications
-        violation_desc: 'EC2 instance is missing required Environment tag'
+      # Notify via SNS (uncomment when SNS topic is created)
+      # - type: notify
+      #   template: default
+      #   priority_header: '1'
+      #   subject: 'Cloud Custodian: Untagged EC2 Instance Found'
+      #   to:
+      #     - resource-owner
+      #   transport:
+      #     type: sns
+      #     topic: arn:aws:sns:us-east-1:172327596604:cloud-custodian-notifications
+      #   violation_desc: 'EC2 instance is missing required Environment tag'
 
   # Cost Optimization: Find oversized EBS volumes
   - name: ebs-oversized-volumes

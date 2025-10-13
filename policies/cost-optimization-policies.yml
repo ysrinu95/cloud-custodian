@@ -90,13 +90,12 @@ policies:
   # Find unused Elastic Load Balancers
   - name: elb-no-targets
     description: |
-      Find Classic Load Balancers with no healthy targets.
+      Find Classic Load Balancers with no registered instances.
       These incur costs without providing value.
     resource: aws.elb
     filters:
-      # No healthy instances
-      - type: healthcheck-protocol-mismatch
-        threshold: 0
+      # No instances registered
+      - "Instances": []
     actions:
       # Tag for review
       - type: tag
