@@ -9,7 +9,6 @@ policies:
       type: cloudtrail
       events:
         - RunInstances
-        - StartInstances
     filters:
       - "tag:Name": absent
       - "tag:Environment": absent
@@ -40,10 +39,8 @@ policies:
       type: cloudtrail
       events:
         - CreateBucket
-        - PutBucketAcl
-        - PutBucketPolicy
     filters:
-      - type: bucket-public-access-block
+      - type: check-public-block
         BlockPublicAcls: false
     actions:
       - type: set-public-block
@@ -68,10 +65,8 @@ policies:
       Triggers when security group rules are modified.
     resource: aws.security-group
     mode:
-      type: cloudtrail
-      events:
-        - AuthorizeSecurityGroupIngress
-        - AuthorizeSecurityGroupEgress
+      type: periodic
+      schedule: "rate(5 minutes)"
     filters:
       - type: ingress
         Ports: [22]
@@ -96,15 +91,10 @@ policies:
       Triggers when IAM policies are created or modified.
     resource: aws.iam-policy
     mode:
-      type: cloudtrail
-      events:
-        - CreatePolicy
-        - CreatePolicyVersion
+      type: periodic
+      schedule: "rate(5 minutes)"
     filters:
-      - type: policy-statement
-        effect: Allow
-        action: "*"
-        resource: "*"
+      - type: has-allow-all
     actions:
       - type: notify
         template: default
@@ -155,7 +145,6 @@ policies:
       type: cloudtrail
       events:
         - CreateDBInstance
-        - ModifyDBInstance
     filters:
       - PubliclyAccessible: true
     actions:
