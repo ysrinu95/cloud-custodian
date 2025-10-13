@@ -32,7 +32,6 @@ policies:
     actions:
       # Create snapshot for backup
       - type: snapshot
-        copy-tags: true
       # Tag for potential deletion
       - type: tag
         key: CostOptimization

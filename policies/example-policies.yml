@@ -48,7 +48,6 @@ policies:
         value: LargeUnusedVolume
       # Create snapshot before any action
       - type: snapshot
-        copy-tags: true
 
   # Security Policy: S3 buckets without encryption
   - name: s3-unencrypted-buckets
