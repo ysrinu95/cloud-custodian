@@ -7,10 +7,16 @@ on:
         description: 'Type "bootstrap" to confirm you want to create OIDC provider and IAM role'
         required: true
         type: string
+      cleanup_existing:
+        description: 'Clean up existing resources first (if they exist without state tracking)'
+        required: false
+        type: boolean
+        default: false
 
 env:
   TF_VERSION: '1.8.0'
   AWS_REGION: 'us-east-1'
+  TF_STATE_BUCKET: 'ysr95-cloud-custodian-tf-bkt'
 
 jobs:
   bootstrap:
@@ -45,6 +51,36 @@ jobs:
           aws sts get-caller-identity
           echo "✅ AWS connection verified"
       
+      - name: Check for Existing Resources
+        run: |
+          echo "🔍 Checking for existing resources that might conflict..."
+          
+          # Check for existing IAM role
+          if aws iam get-role --role-name "GitHubActions-CloudCustodian-Role" 2>/dev/null; then
+            echo "⚠️ WARNING: IAM role 'GitHubActions-CloudCustodian-Role' already exists"
+            echo "🔄 This bootstrap will update the existing role if needed"
+          else
+            echo "✅ No conflicting IAM role found"
+          fi
+          
+          # Check for existing OIDC provider
+          OIDC_PROVIDERS=$(aws iam list-open-id-connect-providers --query 'OpenIDConnectProviderList[?contains(Arn, `token.actions.githubusercontent.com`)].Arn' --output text 2>/dev/null || echo "")
+          if [ -n "$OIDC_PROVIDERS" ]; then
+            echo "⚠️ WARNING: GitHub OIDC provider already exists: $OIDC_PROVIDERS"
+            echo "🔄 This bootstrap will use the existing provider if compatible"
+          else
+            echo "✅ No conflicting OIDC provider found"
+          fi
+          
+          # Check for existing policy
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          if aws iam get-policy --policy-arn "arn:aws:iam::${ACCOUNT_ID}:policy/CloudCustodianPolicy" 2>/dev/null; then
+            echo "⚠️ WARNING: CloudCustodianPolicy already exists"
+            echo "🔄 This bootstrap will update the existing policy if needed"
+          else
+            echo "✅ No conflicting policy found"
+          fi
+      
       - name: Create terraform.tfvars
         run: |
           cat > terraform.tfvars <<EOF
@@ -67,10 +103,88 @@ jobs:
             echo "✅ Terraform formatting OK"
           fi
       
-      - name: Terraform Init
+      - name: Cleanup Existing Resources (Optional)
+        if: github.event.inputs.cleanup_existing == 'true'
         run: |
-          echo "🔄 Initializing Terraform for bootstrap..."
-          terraform init
+          echo "🧹 Cleaning up existing resources without state tracking..."
+          
+          # Get account ID
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          
+          # Remove role policy attachments
+          echo "🔗 Detaching policies from existing role..."
+          aws iam detach-role-policy --role-name "GitHubActions-CloudCustodian-Role" --policy-arn "arn:aws:iam::${ACCOUNT_ID}:policy/CloudCustodianPolicy" 2>/dev/null || echo "Policy not attached"
+          aws iam detach-role-policy --role-name "GitHubActions-CloudCustodian-Role" --policy-arn "arn:aws:iam::aws:policy/ReadOnlyAccess" 2>/dev/null || echo "ReadOnly policy not attached"
+          
+          # Delete existing resources
+          echo "🗑️ Deleting existing IAM role..."
+          aws iam delete-role --role-name "GitHubActions-CloudCustodian-Role" 2>/dev/null || echo "Role doesn't exist"
+          
+          echo "🗑️ Deleting existing CloudCustodian policy..."
+          aws iam delete-policy --policy-arn "arn:aws:iam::${ACCOUNT_ID}:policy/CloudCustodianPolicy" 2>/dev/null || echo "Policy doesn't exist"
+          
+          # Delete OIDC provider
+          echo "🗑️ Deleting existing OIDC provider..."
+          OIDC_PROVIDERS=$(aws iam list-open-id-connect-providers --query 'OpenIDConnectProviderList[?contains(Arn, `token.actions.githubusercontent.com`)].Arn' --output text 2>/dev/null || echo "")
+          if [ -n "$OIDC_PROVIDERS" ]; then
+            for arn in $OIDC_PROVIDERS; do
+              aws iam delete-open-id-connect-provider --open-id-connect-provider-arn "$arn" 2>/dev/null || echo "OIDC provider doesn't exist"
+            done
+          fi
+          
+          echo "✅ Cleanup completed"
+      
+      - name: Ensure S3 Backend Bucket Exists
+        run: |
+          echo "🪣 Ensuring S3 bucket exists for Terraform state..."
+          
+          # Check if bucket exists
+          if aws s3 ls "s3://${{ env.TF_STATE_BUCKET }}" 2>/dev/null; then
+            echo "✅ S3 bucket ${{ env.TF_STATE_BUCKET }} already exists"
+          else
+            echo "🆕 Creating S3 bucket ${{ env.TF_STATE_BUCKET }}..."
+            
+            # Create bucket
+            aws s3 mb "s3://${{ env.TF_STATE_BUCKET }}" --region ${{ env.AWS_REGION }}
+            
+            # Enable versioning
+            echo "🔄 Enabling versioning..."
+            aws s3api put-bucket-versioning \
+              --bucket ${{ env.TF_STATE_BUCKET }} \
+              --versioning-configuration Status=Enabled
+            
+            # Enable encryption
+            echo "🔒 Enabling encryption..."
+            aws s3api put-bucket-encryption \
+              --bucket ${{ env.TF_STATE_BUCKET }} \
+              --server-side-encryption-configuration '{
+                "Rules": [
+                  {
+                    "ApplyServerSideEncryptionByDefault": {
+                      "SSEAlgorithm": "AES256"
+                    }
+                  }
+                ]
+              }'
+            
+            # Block public access
+            echo "🚫 Blocking public access..."
+            aws s3api put-public-access-block \
+              --bucket ${{ env.TF_STATE_BUCKET }} \
+              --public-access-block-configuration '{
+                "BlockPublicAcls": true,
+                "IgnorePublicAcls": true,
+                "BlockPublicPolicy": true,
+                "RestrictPublicBuckets": true
+              }'
+            
+            echo "✅ S3 bucket created and configured"
+          fi
+      
+      - name: Terraform Init (S3 backend)
+        run: |
+          echo "🔄 Initializing Terraform for bootstrap with S3 backend..."
+          terraform init -upgrade
       
       - name: Terraform Validate
         run: terraform validate
@@ -78,7 +192,18 @@ jobs:
       - name: Terraform Plan
         run: |
           echo "📋 Planning OIDC provider and IAM role creation..."
-          terraform plan
+          echo "🔍 Terraform will show what resources will be created/updated/destroyed..."
+          terraform plan -detailed-exitcode
+          PLAN_EXIT_CODE=$?
+          
+          if [ $PLAN_EXIT_CODE -eq 0 ]; then
+            echo "✅ No changes needed - resources already exist and are up to date"
+          elif [ $PLAN_EXIT_CODE -eq 2 ]; then
+            echo "🔄 Changes detected - will create/update resources"
+          else
+            echo "❌ Terraform plan failed"
+            exit $PLAN_EXIT_CODE
+          fi
       
       - name: Terraform Apply
         run: |

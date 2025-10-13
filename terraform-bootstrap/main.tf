@@ -5,14 +5,13 @@
 terraform {
   required_version = ">= 1.6"
   
-  # Use local state for bootstrap - will be migrated to S3 after OIDC setup
-  # backend "s3" {
-  #   bucket  = "ysr95-cloud-custodian-tf-bkt"
-  #   key     = "terraform/bootstrap/terraform.tfstate"
-  #   region  = "us-east-1"
-  #   encrypt = true
-  #   use_lockfile = true
-  # }
+  # S3 backend for remote state management
+  backend "s3" {
+    bucket  = "ysr95-cloud-custodian-tf-bkt"
+    key     = "terraform/bootstrap/terraform.tfstate"
+    region  = "us-east-1"
+    encrypt = true
+  }
   
   required_providers {
     aws = {
