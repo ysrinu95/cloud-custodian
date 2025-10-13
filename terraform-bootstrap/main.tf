@@ -118,6 +118,11 @@ resource "aws_iam_policy" "cloud_custodian_policy" {
           "s3:PutBucketTagging",
           "s3:GetBucketTagging",
           "s3:DeleteBucketTagging",
+          "s3:PutEncryptionConfiguration",
+          "s3:GetEncryptionConfiguration",
+          "s3:PutBucketPublicAccessBlock",
+          "s3:GetBucketPublicAccessBlock",
+          "s3:DeleteBucketPublicAccessBlock",
           
           # Lambda permissions for serverless policies
           "lambda:CreateFunction",
@@ -154,6 +159,8 @@ resource "aws_iam_policy" "cloud_custodian_policy" {
           "logs:TagResource",
           "logs:UntagResource",
           "logs:ListTagsLogGroup",
+          "logs:PutRetentionPolicy",
+          "logs:DeleteRetentionPolicy",
           
           # IAM permissions for Lambda execution roles
           "iam:CreateRole",
