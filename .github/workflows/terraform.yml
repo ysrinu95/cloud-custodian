@@ -125,9 +125,26 @@ jobs:
       - name: Terraform Plan
         id: plan
         run: |
+          echo "🔍 Running Terraform plan..."
           terraform plan -detailed-exitcode -no-color -out=tfplan
-          echo "exit_code=$?" >> $GITHUB_OUTPUT
-        continue-on-error: true
+          PLAN_EXIT_CODE=$?
+          echo "exit_code=$PLAN_EXIT_CODE" >> $GITHUB_OUTPUT
+          
+          if [ $PLAN_EXIT_CODE -eq 0 ]; then
+            echo "✅ No changes detected"
+            echo "plan_result=no-changes" >> $GITHUB_OUTPUT
+          elif [ $PLAN_EXIT_CODE -eq 1 ]; then
+            echo "❌ Terraform plan failed"
+            echo "plan_result=error" >> $GITHUB_OUTPUT
+            exit 1
+          elif [ $PLAN_EXIT_CODE -eq 2 ]; then
+            echo "📋 Changes detected - plan succeeded"
+            echo "plan_result=changes" >> $GITHUB_OUTPUT
+          else
+            echo "❌ Unexpected exit code: $PLAN_EXIT_CODE"
+            echo "plan_result=error" >> $GITHUB_OUTPUT
+            exit 1
+          fi
       
       - name: Save Plan Output
         id: plan_output
@@ -162,7 +179,7 @@ jobs:
             #### Format and Style 🖌 \`${{ steps.fmt.outcome }}\`
             #### Initialization ⚙️ \`${{ steps.init.outcome }}\`
             #### Validation 🤖 \`${{ steps.validate.outcome }}\`
-            #### Plan 📖 \`${{ steps.plan.outcome }}\`
+            #### Plan 📖 \`${{ steps.plan.outputs.plan_result || 'unknown' }}\` (Exit Code: \`${{ steps.plan.outputs.exit_code }}\`)
             
             <details><summary>📋 Show Terraform Plan</summary>
             
@@ -203,19 +220,30 @@ jobs:
             }
       
       - name: Terraform Plan Status
-        if: steps.plan.outcome == 'failure'
+        if: steps.plan.outputs.plan_result == 'error'
         run: |
           echo "❌ Terraform plan failed"
           exit 1
       
       - name: Terraform Apply
         if: |
-          (github.ref == 'refs/heads/main' && github.event_name == 'push') ||
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply')
+          steps.plan.outputs.plan_result == 'changes' && (
+            (github.ref == 'refs/heads/main' && github.event_name == 'push') ||
+            (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply')
+          )
         run: |
           echo "🚀 Applying Terraform configuration..."
           terraform apply -auto-approve tfplan
           echo "✅ Terraform apply completed successfully"
+      
+      - name: No Changes to Apply
+        if: |
+          steps.plan.outputs.plan_result == 'no-changes' && (
+            (github.ref == 'refs/heads/main' && github.event_name == 'push') ||
+            (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply')
+          )
+        run: |
+          echo "ℹ️ No changes detected - skipping apply"
       
       - name: Terraform Destroy
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy'
@@ -226,8 +254,10 @@ jobs:
       
       - name: Output Important Information
         if: |
-          (github.ref == 'refs/heads/main' && github.event_name == 'push') ||
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply')
+          steps.plan.outputs.plan_result == 'changes' && (
+            (github.ref == 'refs/heads/main' && github.event_name == 'push') ||
+            (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply')
+          )
         run: |
           echo "📋 Terraform Outputs:"
           terraform output -json | jq -r 'to_entries[] | "  \(.key) = \(.value.value)"'
