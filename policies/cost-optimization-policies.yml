@@ -23,15 +23,12 @@ policies:
   # Find unattached EBS volumes
   - name: ebs-unattached-volumes
     description: |
-      Find EBS volumes that are not attached to any instance
-      and are older than 7 days. These incur storage costs.
+      Find EBS volumes that are not attached to any instance.
+      These incur storage costs.
     resource: aws.ebs
     filters:
       # Volume is available (not attached)
       - "State": available
-      # Older than 7 days
-      - type: age
-        days: 7
     actions:
       # Create snapshot for backup
       - type: snapshot
@@ -54,8 +51,10 @@ policies:
       - type: age
         days: 90
       # Not used for AMI creation
-      - "Description": not-regex
-      - .*Created by CreateImage.*
+      - type: value
+        key: Description
+        op: not-regex
+        value: ".*Created by CreateImage.*"
     actions:
       # Tag for review
       - type: tag

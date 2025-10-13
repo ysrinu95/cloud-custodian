@@ -41,9 +41,6 @@ policies:
         key: Size
         op: gt
         value: 100
-      # Older than 30 days
-      - type: age
-        days: 30
     actions:
       # Tag for review
       - type: tag
@@ -106,9 +103,6 @@ policies:
     filters:
       # Not associated with any instance
       - "AssociationId": absent
-      # Older than 7 days
-      - type: age
-        days: 7
     actions:
       # Tag for review
       - type: tag
