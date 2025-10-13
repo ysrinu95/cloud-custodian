@@ -56,9 +56,16 @@ jobs:
           EOF
           echo "📝 Created terraform.tfvars for bootstrap"
       
-      - name: Terraform Format Check
-        run: terraform fmt -check -recursive
-        continue-on-error: true
+      - name: Ensure Terraform formatting (auto-fix)
+        run: |
+          echo "🔍 Checking Terraform formatting..."
+          if ! terraform fmt -check -recursive; then
+            echo "⚠️ Terraform format issues found — auto-formatting files..."
+            terraform fmt -recursive
+            echo "✅ Files formatted"
+          else
+            echo "✅ Terraform formatting OK"
+          fi
       
       - name: Terraform Init
         run: |
