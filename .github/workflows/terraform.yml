@@ -140,6 +140,7 @@ jobs:
           elif [ $PLAN_EXIT_CODE -eq 2 ]; then
             echo "📋 Changes detected - plan succeeded"
             echo "plan_result=changes" >> $GITHUB_OUTPUT
+            exit 0  # Explicitly exit with success
           else
             echo "❌ Unexpected exit code: $PLAN_EXIT_CODE"
             echo "plan_result=error" >> $GITHUB_OUTPUT
