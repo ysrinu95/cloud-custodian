@@ -138,6 +138,9 @@ resource "aws_iam_policy" "cloud_custodian_policy" {
           "lambda:GetPolicy",
           "lambda:PutProvisionedConcurrencyConfig",
           "lambda:DeleteProvisionedConcurrencyConfig",
+          "lambda:TagResource",
+          "lambda:UntagResource",
+          "lambda:ListTags",
           
           # CloudWatch Events for Lambda triggers
           "events:PutRule",
@@ -146,6 +149,10 @@ resource "aws_iam_policy" "cloud_custodian_policy" {
           "events:PutTargets",
           "events:RemoveTargets",
           "events:ListTargetsByRule",
+          "events:ListRules",
+          "events:TagResource",
+          "events:UntagResource",
+          "events:ListTagsForResource",
           
           # CloudWatch Logs
           "logs:CreateLogGroup",
