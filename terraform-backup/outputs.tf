@@ -34,22 +34,10 @@ output "custodian_sns_topic_arn" {
   value       = aws_sns_topic.custodian_notifications.arn
 }
 
-# Lambda Execution Role (legacy)
+# Lambda Execution Role
 output "custodian_lambda_role_arn" {
   description = "IAM role ARN for Cloud Custodian Lambda functions"
   value       = aws_iam_role.custodian_lambda_execution.arn
-}
-
-# Primary Cloud Custodian execution role
-output "custodian_execution_role_arn" {
-  description = "Primary IAM role ARN for Cloud Custodian execution"
-  value       = aws_iam_role.custodian_execution.arn
-}
-
-# Enterprise logging bucket (conditional)
-output "custodian_logs_bucket" {
-  description = "S3 bucket for Cloud Custodian logs (enterprise feature)"
-  value       = var.enable_enterprise_features ? aws_s3_bucket.custodian_logs[0].bucket : null
 }
 
 # AWS Account ID

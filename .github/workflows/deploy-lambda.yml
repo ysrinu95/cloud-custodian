@@ -15,7 +15,7 @@ on:
       policy_path:
         description: 'Path to Cloud Custodian policy files'
         required: false
-        default: 'policies'
+        default: 'c7n/policies'
         type: string
       lambda_timeout:
         description: 'Lambda function timeout (seconds)'

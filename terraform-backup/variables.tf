@@ -5,20 +5,6 @@ variable "aws_region" {
   default     = "us-east-1"
 }
 
-# AWS Profile (for local development)
-variable "aws_profile" {
-  description = "Local AWS profile to use when running locally"
-  type        = string
-  default     = null
-}
-
-# GitHub Actions Web Identity Role (for CI/CD)
-variable "github_actions_web_identity_role" {
-  description = "Role ARN for GitHub Actions web identity authentication"
-  type        = string
-  default     = null
-}
-
 # GitHub Repository
 variable "github_repository" {
   description = "GitHub repository in the format 'owner/repo'"
@@ -45,18 +31,4 @@ variable "project_name" {
   description = "Name of the project"
   type        = string
   default     = "cloud-custodian"
-}
-
-# Enable Enterprise Features
-variable "enable_enterprise_features" {
-  description = "Enable enterprise features like SQS mailer queue, advanced logging, etc."
-  type        = bool
-  default     = false
-}
-
-# Email for SES identity (when enterprise features enabled)
-variable "notification_email" {
-  description = "Email address for SES identity and notifications"
-  type        = string
-  default     = null
 }

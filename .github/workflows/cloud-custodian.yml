@@ -13,9 +13,9 @@ on:
         - run
         - dryrun
       policy_path:
-        description: 'Path to policy files (e.g., policies/)'
+        description: 'Path to policy files (e.g., c7n/policies/)'
         required: false
-        default: 'policies/'
+        default: 'c7n/policies/'
       output_dir:
         description: 'Output directory for results'
         required: false

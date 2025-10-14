@@ -1,0 +1,4 @@
+# Force workflow trigger
+# This file change will trigger the terraform.yml workflow with the updated exit code handling
+
+Timestamp: $(Get-Date)

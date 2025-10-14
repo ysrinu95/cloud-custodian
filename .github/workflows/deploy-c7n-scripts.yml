@@ -1,0 +1,202 @@
+name: Deploy with c7n Scripts
+
+on:
+  workflow_dispatch:
+    inputs:
+      script_action:
+        description: 'Which c7n script to run'
+        required: true
+        default: 'deploy-policies'
+        type: choice
+        options:
+        - deploy-policies
+        - deploy-updated-policies
+        - deploy-mailer
+        - clean-removed-policies
+      environment:
+        description: 'Target environment'
+        required: false
+        default: 'development'
+        type: choice
+        options:
+        - development
+        - staging
+        - production
+      dry_run:
+        description: 'Run in dry-run mode'
+        required: false
+        default: true
+        type: boolean
+
+env:
+  AWS_REGION: 'us-east-1'
+
+jobs:
+  deploy-with-scripts:
+    name: 'Deploy with c7n Scripts'
+    runs-on: ubuntu-latest
+    
+    permissions:
+      id-token: write
+      contents: read
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-c7n-Scripts-${{ github.run_number }}
+      
+      - name: Install Cloud Custodian
+        run: |
+          echo "📦 Installing Cloud Custodian and dependencies..."
+          pip install --upgrade pip
+          pip install 'c7n>=0.9.40'
+          
+          # Install additional c7n packages for mailer if needed
+          if [ "${{ github.event.inputs.script_action }}" = "deploy-mailer" ]; then
+            pip install c7n-mailer
+          fi
+          
+          echo "✅ Installation complete"
+          custodian version
+      
+      - name: Install Script Dependencies
+        run: |
+          echo "🔧 Installing script dependencies..."
+          # Install required packages from c7n/requirements.txt if it exists
+          if [ -f "c7n/requirements.txt" ]; then
+            pip install -r c7n/requirements.txt
+            echo "✅ Installed c7n requirements"
+          fi
+          
+          # Install jq for JSON processing
+          sudo apt-get update && sudo apt-get install -y jq
+          echo "✅ Dependencies installed"
+      
+      - name: Make Scripts Executable
+        run: |
+          echo "🔧 Making c7n scripts executable..."
+          chmod +x c7n/scripts/*.sh
+          echo "✅ Scripts are now executable"
+      
+      - name: Set Environment Variables
+        run: |
+          echo "🔧 Setting environment variables..."
+          echo "ENVIRONMENT=${{ github.event.inputs.environment }}" >> $GITHUB_ENV
+          echo "DRY_RUN=${{ github.event.inputs.dry_run }}" >> $GITHUB_ENV
+          
+          # Set role ARN based on environment (adjust as needed)
+          case "${{ github.event.inputs.environment }}" in
+            development)
+              echo "CUSTODIAN_ROLE=arn:aws:iam::172327596604:role/GitHubActions-CloudCustodian-Role" >> $GITHUB_ENV
+              ;;
+            staging)
+              echo "CUSTODIAN_ROLE=arn:aws:iam::172327596604:role/GitHubActions-CloudCustodian-Role" >> $GITHUB_ENV
+              ;;
+            production)
+              echo "CUSTODIAN_ROLE=arn:aws:iam::172327596604:role/GitHubActions-CloudCustodian-Role" >> $GITHUB_ENV
+              ;;
+          esac
+          
+          echo "✅ Environment variables set"
+      
+      - name: Run Deploy Policies Script
+        if: github.event.inputs.script_action == 'deploy-policies'
+        run: |
+          echo "🚀 Running deploy-policies.sh..."
+          cd c7n
+          
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            echo "🔍 Running in dry-run mode..."
+            export DRY_RUN=true
+          fi
+          
+          ./scripts/deploy-policies.sh
+          echo "✅ Deploy policies script completed"
+      
+      - name: Run Deploy Updated Policies Script
+        if: github.event.inputs.script_action == 'deploy-updated-policies'
+        run: |
+          echo "🔄 Running deploy-updated-policies.sh..."
+          cd c7n
+          
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            echo "🔍 Running in dry-run mode..."
+            export DRY_RUN=true
+          fi
+          
+          ./scripts/deploy-updated-policies.sh
+          echo "✅ Deploy updated policies script completed"
+      
+      - name: Run Deploy Mailer Script
+        if: github.event.inputs.script_action == 'deploy-mailer'
+        run: |
+          echo "📧 Running deploy-mailer.sh..."
+          cd c7n
+          
+          ./scripts/deploy-mailer.sh
+          echo "✅ Deploy mailer script completed"
+      
+      - name: Run Clean Removed Policies Script
+        if: github.event.inputs.script_action == 'clean-removed-policies'
+        run: |
+          echo "🧹 Running clean-removed-policies.sh..."
+          cd c7n
+          
+          ./scripts/clean-removed-policies.sh
+          echo "✅ Clean removed policies script completed"
+      
+      - name: Upload Script Output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c7n-script-output-${{ github.run_number }}
+          path: |
+            c7n/output/
+            c7n/logs/
+          retention-days: 30
+      
+      - name: Generate Deployment Summary
+        if: always()
+        run: |
+          echo "🛠️ c7n Scripts Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "==================================" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Script**: ${{ github.event.inputs.script_action }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment**: ${{ github.event.inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Dry Run**: ${{ github.event.inputs.dry_run }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Execution Time**: $(date)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "## 📁 Script Locations" >> $GITHUB_STEP_SUMMARY
+          echo "- **Scripts**: \`c7n/scripts/\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Policies**: \`c7n/policies/\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Config**: \`c7n/config/\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "## 🎯 Available Scripts" >> $GITHUB_STEP_SUMMARY
+          echo "- **deploy-policies.sh**: Deploy all Cloud Custodian policies" >> $GITHUB_STEP_SUMMARY
+          echo "- **deploy-updated-policies.sh**: Deploy only changed policies" >> $GITHUB_STEP_SUMMARY
+          echo "- **deploy-mailer.sh**: Deploy notification mailer service" >> $GITHUB_STEP_SUMMARY
+          echo "- **clean-removed-policies.sh**: Clean up removed policy resources" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            echo "## 🔍 Dry Run Mode" >> $GITHUB_STEP_SUMMARY
+            echo "This execution was run in **dry-run mode**. No actual changes were made to AWS resources." >> $GITHUB_STEP_SUMMARY
+            echo "Review the artifacts to see what would have been changed." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## ✅ Live Execution" >> $GITHUB_STEP_SUMMARY
+            echo "This execution made **actual changes** to AWS resources." >> $GITHUB_STEP_SUMMARY
+            echo "Check CloudWatch Logs and AWS Console for deployment results." >> $GITHUB_STEP_SUMMARY
+          fi

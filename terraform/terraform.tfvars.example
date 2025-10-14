@@ -4,6 +4,12 @@
 # AWS Region where resources will be created
 aws_region = "us-east-1"
 
+# AWS Profile for local development (optional)
+# aws_profile = "default"
+
+# GitHub Actions Web Identity Role ARN for CI/CD (optional)
+# github_actions_web_identity_role = "arn:aws:iam::123456789012:role/github-actions-role"
+
 # GitHub repository in owner/repository format
 github_repository = "ysrinu95/cloud-custodian"
 
@@ -15,3 +21,9 @@ environment = "dev"
 
 # Project name
 project_name = "cloud-custodian"
+
+# Enable enterprise features like SQS mailer queue, advanced logging, etc.
+enable_enterprise_features = false
+
+# Email address for SES identity and notifications (required if enterprise features enabled)
+# notification_email = "alerts@yourcompany.com"

@@ -68,9 +68,12 @@ jobs:
         if: github.event.inputs.policy_set == 'security' || github.event.inputs.policy_set == 'all' || github.event_name == 'schedule'
         run: |
           echo "🛡️ Running security policies..."
-          if [ -f "policies/security-policies.yml" ]; then
-            custodian run --dryrun -s $OUTPUT_DIR/security policies/security-policies.yml
+          if [ -f "c7n/policies/user-security.yml" ]; then
+            custodian run --dryrun -s $OUTPUT_DIR/security c7n/policies/user-security.yml
             echo "✅ Security policies completed"
+          elif [ -f "c7n/policies/s3.yml" ]; then
+            custodian run --dryrun -s $OUTPUT_DIR/security c7n/policies/s3.yml
+            echo "✅ S3 security policies completed"
           else
             echo "⚠️ Security policies file not found"
           fi
@@ -79,8 +82,8 @@ jobs:
         if: github.event.inputs.policy_set == 'cost-optimization' || github.event.inputs.policy_set == 'all' || github.event_name == 'schedule'
         run: |
           echo "💰 Running cost optimization policies..."
-          if [ -f "policies/cost-optimization-policies.yml" ]; then
-            custodian run --dryrun -s $OUTPUT_DIR/cost-optimization policies/cost-optimization-policies.yml
+          if [ -f "c7n/policies/user-cost-optimization.yml" ]; then
+            custodian run --dryrun -s $OUTPUT_DIR/cost-optimization c7n/policies/user-cost-optimization.yml
             echo "✅ Cost optimization policies completed"
           else
             echo "⚠️ Cost optimization policies file not found"
@@ -90,8 +93,8 @@ jobs:
         if: github.event.inputs.policy_set == 'compliance' || github.event.inputs.policy_set == 'all' || github.event_name == 'schedule'
         run: |
           echo "📋 Running compliance policies..."
-          if [ -f "policies/example-policies.yml" ]; then
-            custodian run --dryrun -s $OUTPUT_DIR/compliance policies/example-policies.yml
+          if [ -f "c7n/policies/user-compliance.yml" ]; then
+            custodian run --dryrun -s $OUTPUT_DIR/compliance c7n/policies/user-compliance.yml
             echo "✅ Compliance policies completed"
           else
             echo "⚠️ Compliance policies file not found"
