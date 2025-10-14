@@ -49,7 +49,6 @@ jobs:
   validate:
     name: 'Validate Cloud Custodian Policies'
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' || github.event.inputs.deployment_type == 'validate'
     
     permissions:
       id-token: write
