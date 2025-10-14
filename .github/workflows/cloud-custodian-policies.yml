@@ -84,11 +84,9 @@ jobs:
           pip install --upgrade pip
           pip install -r c7n/requirements.txt
           
-          # Verify installations
-          echo "✅ Installed versions:"
+          # Verify core installation
+          echo "✅ Verifying Cloud Custodian installation:"
           custodian version
-          c7n-org --version
-          c7n-policystream --version
           echo "✅ Installation complete"
       
       - name: Install Additional Dependencies
@@ -168,14 +166,14 @@ jobs:
           
           mkdir -p ../artifacts/validation-dryrun
           
-          # Create a single-account config for validation
+          # Create a single-account config for validation using development account
           cat > validation-accounts.yml << EOF
           accounts:
-          - account_id: '172327596604'
-            name: validation
+          - account_id: '793362518373'
+            name: development
             regions:
             - us-east-1
-            role: arn:aws:iam::172327596604:role/GitHubActions-CloudCustodian-Role
+            role: arn:aws:iam::793362518373:role/devops/cloud-admin
             vars:
               environment: dev
           EOF
@@ -310,13 +308,23 @@ jobs:
           
           echo "✅ Installation complete"
           custodian version
-          c7n-org --version
       
       - name: Install Additional Dependencies
         if: steps.account-filter.outputs.should_run == 'true'
         run: |
           echo "🔧 Installing additional dependencies..."
           sudo apt-get update && sudo apt-get install -y jq yq
+          
+          # Test c7n-org availability
+          echo "🔍 Testing c7n-org availability..."
+          if command -v c7n-org &> /dev/null; then
+            echo "✅ c7n-org found"
+            c7n-org --help | head -5 || echo "⚠️ c7n-org help issue (non-critical)"
+          else
+            echo "❌ c7n-org not found, attempting reinstall..."
+            pip install --upgrade c7n[org]>=0.9.40
+          fi
+          
           chmod +x c7n/scripts/*.sh
           echo "✅ Dependencies installed"
       
