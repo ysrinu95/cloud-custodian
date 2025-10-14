@@ -29,7 +29,31 @@ c7n/scripts/validate-policies.sh -p policies/user-security.yml
 c7n/scripts/validate-policies.sh -a development -r us-west-2 -v
 ```
 
-## 📋 Available Workflows
+## � Validation-First Policy
+
+**ALL deployment operations require successful policy validation.**
+
+### Mandatory Validation
+- **deploy-updated**: ✅ Validation required
+- **deploy-all**: ✅ Validation required  
+- **deploy-mailer**: ✅ Validation required
+- **cleanup**: ✅ Validation required
+
+### Validation Process
+1. **Policy File Existence**: Verifies policies exist in `c7n/policies/`
+2. **YAML Syntax**: Validates structure with `yq`
+3. **Cloud Custodian Schema**: Validates with `custodian validate`
+4. **Pre-Deployment Check**: Double verification before deployment
+
+### Benefits
+- 🛡️ **Prevents Invalid Deployments**: No broken policies deployed
+- 🚀 **Early Error Detection**: Catch issues before deployment
+- ✅ **Schema Compliance**: Ensures C7N standards
+- 📊 **Quality Assurance**: Consistent policy quality
+
+See `VALIDATION_FIRST_POLICY.md` for complete details.
+
+## �📋 Available Workflows
 
 ### 1. Cloud Custodian Policies (`cloud-custodian-policies.yml`)
 
@@ -41,12 +65,12 @@ c7n/scripts/validate-policies.sh -a development -r us-west-2 -v
 - Push to main branch (auto-deployment)
 
 **Features:**
-- ✅ **Policy Validation**: Syntax, schema, and dry-run validation
+- ✅ **Mandatory Policy Validation**: All deployment operations require successful validation
 - 🔍 **Change Detection**: Only deploy updated policies using c7n-policystream
 - 🎯 **Multi-Account Deployment**: Deploy across 7 AWS accounts (development, staging, production, shared, audit, log, root)
 - 🔐 **OIDC Authentication**: Secure, credential-less AWS access
 - 📊 **Matrix Strategy**: Parallel deployment across accounts
-- 🧹 **Cleanup Support**: Remove obsolete policies and resources
+- 🧹 **Cleanup Support**: Remove obsolete policies and resources (validation required)
 - 📧 **Mailer Integration**: Deploy notification system
 - 📈 **Comprehensive Reporting**: Detailed summaries and artifacts
 
@@ -109,6 +133,7 @@ Remove obsolete policies and resources:
 - Clean up deleted policy files
 - Remove unused Lambda functions
 - Garbage collection for cloud resources
+- **Requires validation**: All policies must be valid before cleanup
 
 ## 🏗️ Architecture
 

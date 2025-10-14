@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       deployment_type:
-        description: 'Type of deployment'
+        description: 'Type of deployment (validation is mandatory for all deployment operations)'
         required: true
         default: 'validate'
         type: choice
@@ -102,22 +102,54 @@ jobs:
           cd c7n
           
           validation_failed=false
+          policy_count=0
+          
+          # Check if policy files exist
+          if ! ls policies/*.yml 1> /dev/null 2>&1; then
+            echo "❌ No policy files found in policies/ directory"
+            validation_failed=true
+          fi
+          
+          # Validate each policy file
           for policy_file in policies/*.yml; do
-            echo "  Validating: $policy_file"
-            if ! custodian validate "$policy_file"; then
-              echo "❌ Validation failed for: $policy_file"
-              validation_failed=true
-            else
-              echo "✅ Validation passed for: $policy_file"
+            if [ -f "$policy_file" ]; then
+              policy_count=$((policy_count + 1))
+              echo "  Validating: $policy_file"
+              
+              # Check YAML syntax first
+              if ! yq eval '.' "$policy_file" > /dev/null 2>&1; then
+                echo "❌ Invalid YAML syntax in: $policy_file"
+                validation_failed=true
+                continue
+              fi
+              
+              # Check Cloud Custodian schema
+              if ! custodian validate "$policy_file"; then
+                echo "❌ Cloud Custodian validation failed for: $policy_file"
+                validation_failed=true
+              else
+                echo "✅ Validation passed for: $policy_file"
+              fi
             fi
           done
           
+          echo "📊 Validation Summary:"
+          echo "  - Total policies validated: $policy_count"
+          
+          if [ "$policy_count" -eq 0 ]; then
+            echo "❌ No policies found to validate"
+            validation_failed=true
+          fi
+          
           if [ "$validation_failed" = true ]; then
+            echo "❌ VALIDATION FAILED: One or more policies have validation errors"
+            echo "🚫 All deployment operations are blocked until validation passes"
             echo "passed=false" >> $GITHUB_OUTPUT
             exit 1
           else
+            echo "✅ All $policy_count policies validated successfully"
+            echo "🎯 Deployment operations are authorized to proceed"
             echo "passed=true" >> $GITHUB_OUTPUT
-            echo "✅ All policies validated successfully"
           fi
       
       - name: Detect Changed Policies
@@ -243,7 +275,7 @@ jobs:
     if: |
       github.event_name == 'workflow_dispatch' && 
       github.event.inputs.deployment_type != 'validate' &&
-      (needs.validate.outputs.validation-passed == 'true' || github.event.inputs.deployment_type == 'cleanup')
+      needs.validate.outputs.validation-passed == 'true'
     
     permissions:
       id-token: write
@@ -298,6 +330,23 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: GitHubActions-c7n-Deploy-${{ matrix.account }}-${{ github.run_number }}
+      
+      - name: Pre-Deployment Validation Check
+        if: steps.account-filter.outputs.should_run == 'true'
+        run: |
+          echo "🔒 Pre-Deployment Validation Check"
+          echo "======================================"
+          
+          if [ "${{ needs.validate.outputs.validation-passed }}" != "true" ]; then
+            echo "❌ DEPLOYMENT BLOCKED: Policy validation has not passed"
+            echo "🚫 All policies must pass validation before any deployment operation"
+            echo "📋 Please fix validation errors and re-run the workflow"
+            exit 1
+          fi
+          
+          echo "✅ Policy validation confirmed - deployment authorized"
+          echo "🎯 Account: ${{ matrix.account }}"
+          echo "🚀 Deployment type: ${{ github.event.inputs.deployment_type }}"
       
       - name: Install Cloud Custodian and Dependencies
         if: steps.account-filter.outputs.should_run == 'true'
@@ -481,14 +530,27 @@ jobs:
           echo "**Target Accounts**: ${{ github.event.inputs.target_accounts }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
+          # Validation-first approach messaging
+          if [ "${{ needs.validate.result }}" = "success" ]; then
+            echo "✅ **Policy validation passed** - All policies are syntactically correct and schema-compliant" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Policy validation failed** - Deployment operations were blocked" >> $GITHUB_STEP_SUMMARY
+          fi
+          
           if [ "${{ needs.deploy.result }}" = "success" ]; then
             echo "✅ **Deployment completed successfully across all target accounts**" >> $GITHUB_STEP_SUMMARY
           elif [ "${{ needs.deploy.result }}" = "failure" ]; then
             echo "❌ **Deployment failed on one or more accounts**" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ needs.deploy.result }}" = "skipped" ]; then
+            echo "⏭️ **Deployment was skipped** (validation-only or validation failed)" >> $GITHUB_STEP_SUMMARY
           else
-            echo "⚠️ **Deployment was skipped or cancelled**" >> $GITHUB_STEP_SUMMARY
+            echo "⚠️ **Deployment was cancelled or had an unexpected result**" >> $GITHUB_STEP_SUMMARY
           fi
           
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 🔒 Validation-First Policy" >> $GITHUB_STEP_SUMMARY
+          echo "**All deployment operations require successful policy validation.**" >> $GITHUB_STEP_SUMMARY
+          echo "This ensures that only syntactically correct and schema-compliant policies are deployed." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "## 📋 Next Steps" >> $GITHUB_STEP_SUMMARY
           echo "1. Review deployment artifacts for detailed results" >> $GITHUB_STEP_SUMMARY
