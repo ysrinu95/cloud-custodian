@@ -1,0 +1,489 @@
+name: Cloud Custodian Policy Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      deployment_type:
+        description: 'Type of deployment'
+        required: true
+        default: 'validate'
+        type: choice
+        options:
+        - validate
+        - deploy-updated
+        - deploy-all
+        - deploy-mailer
+        - cleanup
+      target_accounts:
+        description: 'Target accounts (comma-separated, or "all")'
+        required: false
+        default: 'development'
+        type: string
+      dry_run:
+        description: 'Run in dry-run mode'
+        required: false
+        default: true
+        type: boolean
+      regions:
+        description: 'Target regions (comma-separated)'
+        required: false
+        default: 'us-east-1'
+        type: string
+  
+  push:
+    branches: [main]
+    paths:
+      - 'c7n/**'
+      - '.github/workflows/cloud-custodian-policies.yml'
+  
+  pull_request:
+    paths:
+      - 'c7n/**'
+      - '.github/workflows/cloud-custodian-policies.yml'
+
+env:
+  AWS_REGION: 'us-east-1'
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  validate:
+    name: 'Validate Cloud Custodian Policies'
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.event.inputs.deployment_type == 'validate'
+    
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+    
+    outputs:
+      validation-passed: ${{ steps.validation.outputs.passed }}
+      changed-policies: ${{ steps.change-detection.outputs.policies }}
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need full history for change detection
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-c7n-Validate-${{ github.run_number }}
+      
+      - name: Install Cloud Custodian and Dependencies
+        run: |
+          echo "📦 Installing Cloud Custodian ecosystem..."
+          pip install --upgrade pip
+          pip install -r c7n/requirements.txt
+          
+          # Verify installations
+          echo "✅ Installed versions:"
+          custodian version
+          c7n-org --version
+          c7n-policystream --version
+          echo "✅ Installation complete"
+      
+      - name: Install Additional Dependencies
+        run: |
+          echo "🔧 Installing additional dependencies..."
+          sudo apt-get update && sudo apt-get install -y jq yq
+          echo "✅ Dependencies installed"
+      
+      - name: Validate Policy Syntax
+        id: validation
+        run: |
+          echo "🔍 Validating Cloud Custodian policy syntax..."
+          cd c7n
+          
+          validation_failed=false
+          for policy_file in policies/*.yml; do
+            echo "  Validating: $policy_file"
+            if ! custodian validate "$policy_file"; then
+              echo "❌ Validation failed for: $policy_file"
+              validation_failed=true
+            else
+              echo "✅ Validation passed for: $policy_file"
+            fi
+          done
+          
+          if [ "$validation_failed" = true ]; then
+            echo "passed=false" >> $GITHUB_OUTPUT
+            exit 1
+          else
+            echo "passed=true" >> $GITHUB_OUTPUT
+            echo "✅ All policies validated successfully"
+          fi
+      
+      - name: Detect Changed Policies
+        id: change-detection
+        if: github.event_name == 'pull_request' || github.event_name == 'push'
+        run: |
+          echo "🔍 Detecting changed policies..."
+          cd c7n
+          
+          # Set up git refs for comparison
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch origin main
+            base_ref="origin/main"
+            head_ref="HEAD"
+          else
+            # For push events, compare with previous commit
+            base_ref="HEAD~1"
+            head_ref="HEAD"
+          fi
+          
+          echo "Comparing $base_ref to $head_ref"
+          
+          # Use c7n-policystream to detect changes
+          if command -v c7n-policystream >/dev/null 2>&1; then
+            changed_policies=$(c7n-policystream diff --source "$base_ref" --target "$head_ref" | yq -r '.policies[]?.name' 2>/dev/null || echo "")
+          else
+            # Fallback: detect changed policy files
+            changed_files=$(git diff --name-only "$base_ref" "$head_ref" -- policies/ || echo "")
+            changed_policies=""
+            for file in $changed_files; do
+              if [[ "$file" == *.yml ]] && [[ -f "$file" ]]; then
+                file_policies=$(yq -r '.policies[]?.name' "$file" 2>/dev/null || echo "")
+                changed_policies="$changed_policies $file_policies"
+              fi
+            done
+          fi
+          
+          echo "Changed policies: $changed_policies"
+          echo "policies=$changed_policies" >> $GITHUB_OUTPUT
+      
+      - name: Dry Run Changed Policies
+        if: steps.change-detection.outputs.policies != ''
+        run: |
+          echo "🧪 Running dry-run on changed policies..."
+          cd c7n
+          
+          mkdir -p ../artifacts/validation-dryrun
+          
+          # Create a single-account config for validation
+          cat > validation-accounts.yml << EOF
+          accounts:
+          - account_id: '172327596604'
+            name: validation
+            regions:
+            - us-east-1
+            role: arn:aws:iam::172327596604:role/GitHubActions-CloudCustodian-Role
+            vars:
+              environment: dev
+          EOF
+          
+          changed_policies="${{ steps.change-detection.outputs.policies }}"
+          for policy in $changed_policies; do
+            if [ -n "$policy" ]; then
+              echo "  Testing policy: $policy"
+              # Find which file contains this policy
+              for policy_file in policies/*.yml; do
+                if grep -q "name: $policy" "$policy_file"; then
+                  echo "    Found in: $policy_file"
+                  c7n-org run --cache-period=0 -c validation-accounts.yml -s ../artifacts/validation-dryrun -u "$policy_file" -p "$policy" --dryrun || true
+                  break
+                fi
+              done
+            fi
+          done
+          
+          echo "✅ Dry-run validation completed"
+      
+      - name: Upload Validation Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: policy-validation-${{ github.run_number }}
+          path: artifacts/validation-dryrun/
+          retention-days: 30
+      
+      - name: Comment on PR
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const validationPassed = '${{ steps.validation.outputs.passed }}' === 'true';
+            const changedPolicies = '${{ steps.change-detection.outputs.policies }}';
+            
+            let comment = `## 🛡️ Cloud Custodian Policy Validation\n\n`;
+            
+            if (validationPassed) {
+              comment += `✅ **Validation Result**: All policies passed syntax validation\n\n`;
+            } else {
+              comment += `❌ **Validation Result**: Policy validation failed\n\n`;
+            }
+            
+            if (changedPolicies.trim()) {
+              comment += `**Changed Policies**: ${changedPolicies}\n\n`;
+              comment += `🧪 **Dry Run**: Completed for changed policies - check artifacts for details\n\n`;
+            } else {
+              comment += `**Changed Policies**: None detected\n\n`;
+            }
+            
+            comment += `**Artifacts**: Download validation artifacts to review detailed results\n`;
+            comment += `**Next Steps**: ${validationPassed ? 'Ready for deployment' : 'Fix validation errors before proceeding'}`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+  deploy:
+    name: 'Deploy Cloud Custodian Policies'
+    runs-on: ubuntu-latest
+    needs: [validate]
+    if: |
+      github.event_name == 'workflow_dispatch' && 
+      github.event.inputs.deployment_type != 'validate' &&
+      (needs.validate.outputs.validation-passed == 'true' || github.event.inputs.deployment_type == 'cleanup')
+    
+    permissions:
+      id-token: write
+      contents: read
+    
+    strategy:
+      matrix:
+        account: 
+          - development
+          - staging  
+          - production
+          - shared
+          - audit
+          - log
+          - root
+      fail-fast: false
+    
+    steps:
+      - name: Check Account Filter
+        id: account-filter
+        run: |
+          target_accounts="${{ github.event.inputs.target_accounts }}"
+          current_account="${{ matrix.account }}"
+          
+          if [ "$target_accounts" = "all" ]; then
+            echo "should_run=true" >> $GITHUB_OUTPUT
+            echo "✅ Running for account: $current_account (all accounts selected)"
+          elif echo "$target_accounts" | grep -q "$current_account"; then
+            echo "should_run=true" >> $GITHUB_OUTPUT
+            echo "✅ Running for account: $current_account (explicitly selected)"
+          else
+            echo "should_run=false" >> $GITHUB_OUTPUT
+            echo "⏭️ Skipping account: $current_account (not in target list)"
+          fi
+      
+      - name: Checkout
+        if: steps.account-filter.outputs.should_run == 'true'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Setup Python
+        if: steps.account-filter.outputs.should_run == 'true'
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Configure AWS Credentials via OIDC
+        if: steps.account-filter.outputs.should_run == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-c7n-Deploy-${{ matrix.account }}-${{ github.run_number }}
+      
+      - name: Install Cloud Custodian and Dependencies
+        if: steps.account-filter.outputs.should_run == 'true'
+        run: |
+          echo "📦 Installing Cloud Custodian ecosystem..."
+          pip install --upgrade pip
+          pip install -r c7n/requirements.txt
+          
+          echo "✅ Installation complete"
+          custodian version
+          c7n-org --version
+      
+      - name: Install Additional Dependencies
+        if: steps.account-filter.outputs.should_run == 'true'
+        run: |
+          echo "🔧 Installing additional dependencies..."
+          sudo apt-get update && sudo apt-get install -y jq yq
+          chmod +x c7n/scripts/*.sh
+          echo "✅ Dependencies installed"
+      
+      - name: Deploy Updated Policies
+        if: steps.account-filter.outputs.should_run == 'true' && github.event.inputs.deployment_type == 'deploy-updated'
+        run: |
+          echo "🔄 Deploying updated policies to ${{ matrix.account }}..."
+          cd c7n
+          
+          mkdir -p ../artifacts/deploy-updated/${{ matrix.account }}
+          
+          # Configure deployment parameters
+          deploy_args="-a ${{ matrix.account }}"
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            deploy_args="$deploy_args -d"
+          fi
+          
+          # Run the deployment script
+          ./scripts/deploy-updated-policies.sh $deploy_args
+          
+          echo "✅ Updated policies deployment completed for ${{ matrix.account }}"
+      
+      - name: Deploy All Policies
+        if: steps.account-filter.outputs.should_run == 'true' && github.event.inputs.deployment_type == 'deploy-all'
+        run: |
+          echo "🚀 Deploying all policies to ${{ matrix.account }}..."
+          cd c7n
+          
+          mkdir -p ../artifacts/deploy-all/${{ matrix.account }}
+          
+          # Configure deployment parameters
+          deploy_args="-a ${{ matrix.account }}"
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            deploy_args="$deploy_args -d"
+          fi
+          
+          # Run the deployment script
+          ./scripts/deploy-policies.sh $deploy_args
+          
+          echo "✅ All policies deployment completed for ${{ matrix.account }}"
+      
+      - name: Deploy Mailer
+        if: steps.account-filter.outputs.should_run == 'true' && github.event.inputs.deployment_type == 'deploy-mailer' && matrix.account == 'shared'
+        run: |
+          echo "📧 Deploying Cloud Custodian mailer..."
+          cd c7n
+          
+          mkdir -p ../artifacts/deploy-mailer
+          
+          # The mailer is typically deployed to the shared account
+          ./scripts/deploy-mailer.sh
+          
+          echo "✅ Mailer deployment completed"
+      
+      - name: Clean Removed Policies
+        if: steps.account-filter.outputs.should_run == 'true' && github.event.inputs.deployment_type == 'cleanup'
+        run: |
+          echo "🧹 Cleaning up removed policies in ${{ matrix.account }}..."
+          cd c7n
+          
+          mkdir -p ../artifacts/cleanup/${{ matrix.account }}
+          
+          # Configure cleanup parameters
+          cleanup_args=""
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            cleanup_args="$cleanup_args -d"
+          fi
+          
+          # Add region specification if provided
+          regions="${{ github.event.inputs.regions }}"
+          if [ -n "$regions" ] && [ "$regions" != "us-east-1" ]; then
+            IFS=',' read -ra REGION_ARRAY <<< "$regions"
+            for region in "${REGION_ARRAY[@]}"; do
+              cleanup_args="$cleanup_args -r $region"
+            done
+          fi
+          
+          # Run enhanced cleanup (handles CloudWatch Events rules with targets properly)
+          echo "Using enhanced cleanup script that properly handles CloudWatch Events rules..."
+          ./scripts/clean-removed-policies.sh $cleanup_args
+          
+          echo "✅ Cleanup completed for ${{ matrix.account }}"
+      
+      - name: Handle Cleanup Failures
+        if: failure() && github.event.inputs.deployment_type == 'cleanup'
+        run: |
+          echo "⚠️ Cleanup encountered issues. This might be due to CloudWatch Events rules with targets."
+          echo "💡 Solution: Use the enhanced cleanup tools in c7n/scripts/"
+          echo "   - cleanup_events_rule.py for specific rules"
+          echo "   - clean-removed-policies.sh (already enhanced)"
+          echo "   - mugc-enhanced.py for comprehensive cleanup"
+          echo ""
+          echo "📋 Manual steps if needed:"
+          echo "1. Check AWS Console > CloudWatch > Events > Rules"
+          echo "2. Remove targets from any problematic rules"
+          echo "3. Then delete the rules manually"
+          echo "4. Re-run this cleanup workflow"
+      
+      - name: Upload Deployment Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-${{ github.event.inputs.deployment_type }}-${{ matrix.account }}-${{ github.run_number }}
+          path: |
+            artifacts/
+            c7n/.c7n/
+          retention-days: 30
+      
+      - name: Generate Deployment Summary
+        if: always()
+        run: |
+          echo "🚀 Cloud Custodian Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "====================================" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Deployment Type**: ${{ github.event.inputs.deployment_type }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Target Account**: ${{ matrix.account }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Dry Run**: ${{ github.event.inputs.dry_run }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Regions**: ${{ github.event.inputs.regions }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Execution Time**: $(date)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            echo "## 🔍 Dry Run Mode" >> $GITHUB_STEP_SUMMARY
+            echo "This execution was run in **dry-run mode**. No actual changes were made to AWS resources." >> $GITHUB_STEP_SUMMARY
+            echo "Review the artifacts to see what would have been changed." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## ✅ Live Deployment" >> $GITHUB_STEP_SUMMARY
+            echo "This execution made **actual changes** to AWS resources in the ${{ matrix.account }} account." >> $GITHUB_STEP_SUMMARY
+            echo "Check CloudWatch Logs and AWS Console for deployment results." >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 📊 Deployment Details" >> $GITHUB_STEP_SUMMARY
+          echo "- **Script Used**: \`c7n/scripts/$(echo ${{ github.event.inputs.deployment_type }} | sed 's/deploy-/deploy-/' | sed 's/cleanup/clean-removed-policies/').sh\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Config File**: \`c7n/config/accounts.yml\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Policy Directory**: \`c7n/policies/\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Artifacts**: Available in workflow artifacts for 30 days" >> $GITHUB_STEP_SUMMARY
+
+  notify:
+    name: 'Deployment Notification'
+    runs-on: ubuntu-latest
+    needs: [validate, deploy]
+    if: always() && github.event_name == 'workflow_dispatch'
+    
+    steps:
+      - name: Generate Final Summary
+        run: |
+          echo "🎯 Cloud Custodian Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "======================================" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Validation Status**: ${{ needs.validate.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Deployment Status**: ${{ needs.deploy.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Deployment Type**: ${{ github.event.inputs.deployment_type }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Target Accounts**: ${{ github.event.inputs.target_accounts }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ needs.deploy.result }}" = "success" ]; then
+            echo "✅ **Deployment completed successfully across all target accounts**" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ needs.deploy.result }}" = "failure" ]; then
+            echo "❌ **Deployment failed on one or more accounts**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ **Deployment was skipped or cancelled**" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 📋 Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "1. Review deployment artifacts for detailed results" >> $GITHUB_STEP_SUMMARY
+          echo "2. Check CloudWatch Logs in target accounts for policy execution" >> $GITHUB_STEP_SUMMARY
+          echo "3. Monitor AWS resources for policy compliance" >> $GITHUB_STEP_SUMMARY
+          echo "4. Review any failed deployments and retry if necessary" >> $GITHUB_STEP_SUMMARY
