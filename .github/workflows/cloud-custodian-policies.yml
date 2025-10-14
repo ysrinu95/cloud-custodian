@@ -115,13 +115,6 @@ jobs:
               policy_count=$((policy_count + 1))
               echo "  Validating: $policy_file"
               
-              # Check YAML syntax first
-              if ! yq eval '.' "$policy_file" > /dev/null 2>&1; then
-                echo "❌ Invalid YAML syntax in: $policy_file"
-                validation_failed=true
-                continue
-              fi
-              
               # Check Cloud Custodian schema
               if ! custodian validate "$policy_file"; then
                 echo "❌ Cloud Custodian validation failed for: $policy_file"
