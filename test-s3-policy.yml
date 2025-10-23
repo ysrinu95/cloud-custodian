@@ -1,0 +1,14 @@
+policies:
+  - name: test-s3-notification
+    resource: aws.s3
+    description: Test policy for S3 bucket notifications
+    actions:
+      - type: notify
+        template: default
+        priority_header: '1'
+        subject: "Cloud Custodian S3 Bucket Report"
+        to:
+          - ysrinu95@gmail.com
+        transport:
+          type: sqs
+          queue: https://sqs.us-west-2.amazonaws.com/172327596604/c7n-mailer-test

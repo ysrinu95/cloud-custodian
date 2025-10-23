@@ -1,0 +1,16 @@
+policies:
+  - name: test-mailer-notification
+    resource: aws.ec2
+    description: Test policy for mailer notification
+    filters:
+      - "tag:Environment": absent
+    actions:
+      - type: notify
+        template: default
+        priority_header: '1'
+        subject: "Test Cloud Custodian Mailer - PyJWT Fix Verification"
+        to:
+          - ysrinu95@gmail.com
+        transport:
+          type: sqs
+          queue: https://sqs.us-west-2.amazonaws.com/172327596604/c7n-mailer-test
