@@ -7,7 +7,7 @@ region: us-west-2
 lambda_tags:
   contact: devops@optum.com
   environment: central
-  repo: 
+  repo: cloud-custodian
 runtime: python3.11
 
 # custom-defined contact tags for email notify
