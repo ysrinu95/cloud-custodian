@@ -75,7 +75,7 @@ try {
         
         # Test the function
         Write-Host "🧪 Testing Lambda function..." -ForegroundColor Yellow
-        $testPayload = '{}'
+        $testPayload = "{}"
         $responseFile = Join-Path $tempDir "response.json"
         aws lambda invoke --function-name $LambdaFunctionName --region $Region --payload $testPayload $responseFile
         

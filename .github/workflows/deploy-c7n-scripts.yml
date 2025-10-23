@@ -66,9 +66,11 @@ jobs:
           if [ "${{ github.event.inputs.script_action }}" = "deploy-mailer" ]; then
             echo "📧 Installing comprehensive mailer dependencies..."
             pip install --upgrade pip setuptools wheel
-            pip install --force-reinstall PyJWT>=2.0.0
-            pip install --force-reinstall cryptography>=3.0.0
-            pip install --force-reinstall requests>=2.25.0
+            
+            # Use specific versions to avoid conflicts with c7n
+            pip install --force-reinstall PyJWT==2.8.0
+            pip install --force-reinstall cryptography==44.0.0
+            pip install --force-reinstall requests==2.32.4
             pip install --force-reinstall decorator>=4.4.0
             pip install --force-reinstall boto3>=1.26.0
             pip install --force-reinstall botocore>=1.29.0
