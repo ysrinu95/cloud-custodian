@@ -1,0 +1,6 @@
+Collecting decorator
+  Obtaining dependency information for decorator from https://files.pythonhosted.org/packages/4e/8c/f3147f5c4b73e7550fe5f9352eaa956ae838d5c51eb58e7a25b9f3e2643b/decorator-5.2.1-py3-none-any.whl.metadata
+  Using cached decorator-5.2.1-py3-none-any.whl.metadata (3.9 kB)
+Using cached decorator-5.2.1-py3-none-any.whl (9.2 kB)
+Installing collected packages: decorator
+Successfully installed decorator-5.2.1
