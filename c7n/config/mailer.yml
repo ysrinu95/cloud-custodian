@@ -5,9 +5,9 @@ region: us-west-2
 
 # lambda function settings
 lambda_tags:
-  contact: devops@greenstreet.com
-  environment: shared
-  repo: devops/cloud-custodian/c7n
+  contact: devops@optum.com
+  environment: central
+  repo: 
 runtime: python3.11
 
 # custom-defined contact tags for email notify
@@ -16,4 +16,4 @@ contact_tags:
   - owner
 
 # sender address for email notify
-from_address: CloudAdmin@greenstreet.com
+from_address: CloudAdmin@optum.com

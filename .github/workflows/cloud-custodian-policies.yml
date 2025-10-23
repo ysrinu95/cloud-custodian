@@ -17,7 +17,7 @@ on:
       target_accounts:
         description: 'Target accounts (comma-separated, or "all")'
         required: false
-        default: 'development'
+        default: 'engg'
         type: string
       dry_run:
         description: 'Run in dry-run mode'
@@ -156,30 +156,63 @@ jobs:
             git fetch origin main
             base_ref="origin/main"
             head_ref="HEAD"
+            echo "📋 Comparing PR changes: $base_ref → $head_ref"
           else
             # For push events, compare with previous commit
             base_ref="HEAD~1"
             head_ref="HEAD"
+            echo "📋 Comparing push changes: $base_ref → $head_ref"
           fi
           
-          echo "Comparing $base_ref to $head_ref"
+          # Check for changed policy files first
+          changed_files=$(git diff --name-only "$base_ref" "$head_ref" -- policies/ 2>/dev/null || echo "")
+          echo "📄 Changed policy files: $changed_files"
           
-          # Use c7n-policystream to detect changes
+          changed_policies=""
+          
+          # Use c7n-policystream if available for more accurate detection
           if command -v c7n-policystream >/dev/null 2>&1; then
-            changed_policies=$(c7n-policystream diff --source "$base_ref" --target "$head_ref" | yq -r '.policies[]?.name' 2>/dev/null || echo "")
-          else
-            # Fallback: detect changed policy files
-            changed_files=$(git diff --name-only "$base_ref" "$head_ref" -- policies/ || echo "")
-            changed_policies=""
+            echo "🔍 Using c7n-policystream for advanced change detection..."
+            policy_changes=$(c7n-policystream diff --source "$base_ref" --target "$head_ref" 2>/dev/null || echo "")
+            if [ -n "$policy_changes" ]; then
+              changed_policies=$(echo "$policy_changes" | yq -r '.policies[]?.name' 2>/dev/null || echo "")
+            fi
+          fi
+          
+          # Fallback: analyze changed files directly
+          if [ -z "$changed_policies" ] && [ -n "$changed_files" ]; then
+            echo "🔍 Fallback: Analyzing changed files directly..."
             for file in $changed_files; do
               if [[ "$file" == *.yml ]] && [[ -f "$file" ]]; then
+                echo "  📄 Analyzing: $file"
                 file_policies=$(yq -r '.policies[]?.name' "$file" 2>/dev/null || echo "")
-                changed_policies="$changed_policies $file_policies"
+                if [ -n "$file_policies" ]; then
+                  changed_policies="$changed_policies $file_policies"
+                  echo "    Found policies: $file_policies"
+                fi
               fi
             done
           fi
           
-          echo "Changed policies: $changed_policies"
+          # Clean up the policy list (remove duplicates and empty entries)
+          if [ -n "$changed_policies" ]; then
+            changed_policies=$(echo "$changed_policies" | tr ' ' '\n' | sort -u | tr '\n' ' ' | sed 's/[[:space:]]*$//')
+          fi
+          
+          echo ""
+          echo "📊 Change Detection Summary:"
+          echo "============================"
+          echo "  Changed files: $(echo "$changed_files" | wc -w)"
+          echo "  Changed policies: $(echo "$changed_policies" | wc -w)"
+          echo "  Policy names: $changed_policies"
+          echo ""
+          
+          if [ -n "$changed_policies" ]; then
+            echo "✅ Policy changes detected - dry-run will be performed"
+          else
+            echo "📝 No policy changes detected - skipping dry-run"
+          fi
+          
           echo "policies=$changed_policies" >> $GITHUB_OUTPUT
       
       - name: Dry Run Changed Policies
@@ -193,29 +226,67 @@ jobs:
           # Create a single-account config for validation using development account
           cat > validation-accounts.yml << EOF
           accounts:
-          - account_id: '793362518373'
-            name: development
+          - account_id: '172327596604'
+            name: engg
             regions:
             - us-east-1
-            role: arn:aws:iam::793362518373:role/devops/cloud-admin
+            role: arn:aws:iam::172327596604:role/CloudCustodian-Lambda-ExecutionRole
             vars:
-              environment: dev
+              environment: engg
           EOF
           
           changed_policies="${{ steps.change-detection.outputs.policies }}"
+          policy_count=0
+          tested_count=0
+          
+          echo "📋 Changed policies detected: $changed_policies"
+          echo ""
+          
           for policy in $changed_policies; do
             if [ -n "$policy" ]; then
-              echo "  Testing policy: $policy"
+              policy_count=$((policy_count + 1))
+              echo "🔍 Testing policy: $policy"
+              
               # Find which file contains this policy
+              found_file=""
               for policy_file in policies/*.yml; do
                 if grep -q "name: $policy" "$policy_file"; then
-                  echo "    Found in: $policy_file"
-                  c7n-org run --cache-period=0 -c validation-accounts.yml -s ../artifacts/validation-dryrun -u "$policy_file" -p "$policy" --dryrun || true
+                  found_file="$policy_file"
                   break
                 fi
               done
+              
+              if [ -n "$found_file" ]; then
+                echo "  📄 Found in: $found_file"
+                echo "  🚀 Running dry-run against account: engg"
+                
+                if c7n-org run --cache-period=0 -c validation-accounts.yml -s ../artifacts/validation-dryrun -u "$found_file" -p "$policy" --dryrun; then
+                  echo "  ✅ Dry-run completed successfully for: $policy"
+                  tested_count=$((tested_count + 1))
+                else
+                  echo "  ⚠️ Dry-run encountered issues for: $policy (check artifacts for details)"
+                  # Continue with other policies even if one fails
+                fi
+              else
+                echo "  ❌ Policy file not found for: $policy"
+              fi
+              echo ""
             fi
           done
+          
+          echo "📊 Changed Policy Dry-Run Summary:"
+          echo "================================="
+          echo "  Changed policies detected: $policy_count"
+          echo "  Successfully tested: $tested_count"
+          echo ""
+          
+          if [ "$tested_count" -eq "$policy_count" ] && [ "$policy_count" -gt 0 ]; then
+            echo "✅ All changed policies completed dry-run testing"
+          elif [ "$policy_count" -gt 0 ]; then
+            echo "⚠️ Some changed policies had issues during dry-run (see artifacts for details)"
+          else
+            echo "📝 No changed policies to test"
+          fi
           
           echo "✅ Dry-run validation completed"
       
@@ -244,14 +315,28 @@ jobs:
             }
             
             if (changedPolicies.trim()) {
-              comment += `**Changed Policies**: ${changedPolicies}\n\n`;
-              comment += `🧪 **Dry Run**: Completed for changed policies - check artifacts for details\n\n`;
+              const policyList = changedPolicies.trim().split(' ').filter(p => p.length > 0);
+              comment += `**Changed Policies** (${policyList.length} detected):\n`;
+              policyList.forEach(policy => {
+                comment += `- \`${policy}\`\n`;
+              });
+              comment += `\n🧪 **Dry Run**: Completed for changed policies against \`engg\` account\n`;
+              comment += `📊 **Coverage**: Only changed policies tested (efficient approach)\n\n`;
             } else {
               comment += `**Changed Policies**: None detected\n\n`;
             }
             
             comment += `**Artifacts**: Download validation artifacts to review detailed results\n`;
-            comment += `**Next Steps**: ${validationPassed ? 'Ready for deployment' : 'Fix validation errors before proceeding'}`;
+            comment += `**Test Account**: \`engg\` (172327596604)\n`;
+            comment += `**Next Steps**: ${validationPassed ? '✅ Ready for deployment' : '❌ Fix validation errors before proceeding'}\n\n`;
+            
+            if (changedPolicies.trim()) {
+              comment += `### 🔍 What was tested:\n`;
+              comment += `- **Syntax Validation**: All policy files checked\n`;
+              comment += `- **Schema Validation**: Cloud Custodian schema compliance\n`;
+              comment += `- **Dry Run**: Changed policies tested against AWS resources\n`;
+              comment += `- **Account**: engg environment for safe testing\n`;
+            }
             
             github.rest.issues.createComment({
               issue_number: context.issue.number,
@@ -276,13 +361,10 @@ jobs:
     strategy:
       matrix:
         account: 
-          - development
-          - staging  
-          - production
-          - shared
-          - audit
-          - log
-          - root
+          - engg
+          - nonprod
+          - prod
+          - central
       fail-fast: false
     
     steps:
@@ -408,14 +490,14 @@ jobs:
           echo "✅ All policies deployment completed for ${{ matrix.account }}"
       
       - name: Deploy Mailer
-        if: steps.account-filter.outputs.should_run == 'true' && github.event.inputs.deployment_type == 'deploy-mailer' && matrix.account == 'shared'
+        if: steps.account-filter.outputs.should_run == 'true' && github.event.inputs.deployment_type == 'deploy-mailer' && matrix.account == 'central'
         run: |
           echo "📧 Deploying Cloud Custodian mailer..."
           cd c7n
           
           mkdir -p ../artifacts/deploy-mailer
           
-          # The mailer is typically deployed to the shared account
+          # The mailer is typically deployed to the central account
           ./scripts/deploy-mailer.sh
           
           echo "✅ Mailer deployment completed"

@@ -64,7 +64,16 @@ jobs:
           
           # Install additional c7n packages for mailer if needed
           if [ "${{ github.event.inputs.script_action }}" = "deploy-mailer" ]; then
+            echo "📧 Installing mailer dependencies..."
             pip install c7n-mailer
+            pip install decorator>=4.4.0
+            pip install boto3>=1.26.0
+            pip install botocore>=1.29.0
+            pip install jsonschema>=3.0.0
+            pip install python-dateutil>=2.8.0
+            pip install pyyaml>=5.4.0
+            pip install tabulate>=0.8.0
+            echo "✅ Mailer dependencies installed"
           fi
           
           echo "✅ Installation complete"

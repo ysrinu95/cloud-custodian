@@ -1,98 +1,13 @@
 accounts:
-- account_id: '472908028927'
-  name: root
+- account_id: '172327596604'
+  name: engg
   regions:
   - us-east-1
-  - us-west-2
-  # - us-east-2
-  role: arn:aws:iam::472908028927:role/devops/cloud-admin
-  # profile: gsa-a # local
+  - us-east-2
+  role: arn:aws:iam::172327596604:role/CloudCustodian-Lambda-ExecutionRole
+  # profile: engg # local
   vars:
-    environment: root
+    environment: engg
   tags:
-  - environment:root
-  - ou:root
-
-- account_id: '140253569749'
-  name: shared
-  regions:
-  - us-east-1
-  - us-west-2
-  # - us-east-2
-  role: arn:aws:iam::140253569749:role/devops/cloud-admin
-  # profile: shared-a # local
-  vars:
-    environment: shr
-  tags:
-  - environment:shr
-  - ou:core
-
-- account_id: '605289256863'
-  name: audit
-  regions:
-  - us-east-1
-  - us-west-2
-  # - us-east-2
-  role: arn:aws:iam::605289256863:role/devops/cloud-admin
-  # profile: audit-a # local
-  vars:
-    environment: audit
-  tags:
-  - environment:audit
-  - ou:security
-
-- account_id: '957617154769'
-  name: log
-  regions:
-  - us-east-1
-  - us-west-2
-  # - us-east-2
-  role: arn:aws:iam::957617154769:role/devops/cloud-admin
-  # profile: log-a # local
-  vars:
-    environment: log
-  tags:
-  - environment:log
-  - ou:security
-
-- account_id: '793362518373'
-  name: development
-  regions:
-  - us-east-1
-  - us-west-2
-  # - us-east-2
-  role: arn:aws:iam::793362518373:role/devops/cloud-admin
-  # profile: dev-a # local
-  vars:
-    environment: dev
-  tags:
-  - environment:dev
-  - ou:dev
-
-- account_id: '101300729637'
-  name: production
-  regions:
-  - us-east-1
-  - us-west-2
-  # - us-east-2
-  role: arn:aws:iam::101300729637:role/devops/cloud-admin
-  # profile: prod-a # local
-  vars:
-    environment: prd
-  tags:
-  - environment:prd
-  - ou:prod
-
-- account_id: '301712053745'
-  name: staging
-  regions:
-  - us-east-1
-  - us-west-2
-  # - us-east-2
-  role: arn:aws:iam::301712053745:role/devops/cloud-admin
-  # profile: stage-a # local
-  vars:
-    environment: stg
-  tags:
-  - environment:stg
-  - ou:staging
+  - environment:engg
+  - ou:aikyam
