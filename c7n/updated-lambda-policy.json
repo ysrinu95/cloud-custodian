@@ -1,0 +1,21 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ec2:*",
+        "s3:*",
+        "sns:Publish",
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents",
+        "cloudwatch:PutMetricData",
+        "sts:GetCallerIdentity",
+        "sqs:*",
+        "ses:*"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

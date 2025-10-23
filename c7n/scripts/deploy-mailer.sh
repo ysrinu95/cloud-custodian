@@ -48,15 +48,26 @@ pip install --upgrade pip setuptools wheel
 # Step 3: Install dependencies with proven versions
 echo ""
 print_info "Step 3: Installing Cloud Custodian and mailer dependencies..."
-print_info "Using specific versions that resolve PyJWT packaging issues..."
+print_info "Using compatible versions that resolve dependency conflicts..."
 
-# Install core c7n first
+# Install core c7n first to get the right base versions
 pip install --force-reinstall 'c7n>=0.9.21'
 
-# Install dependencies with exact versions to avoid conflicts
-pip install --force-reinstall PyJWT==2.8.0
-pip install --force-reinstall cryptography==44.0.0  
-pip install --force-reinstall requests==2.32.4
+# Get the currently installed versions to avoid conflicts
+print_info "Checking installed package versions for compatibility..."
+
+# Install c7n-mailer which will pull in compatible dependencies
+pip install --force-reinstall 'c7n-mailer>=0.6.20'
+
+# Now install specific versions that are compatible with current c7n
+# Use versions that match what c7n expects
+C7N_CRYPTO_VERSION=$(pip show c7n | grep -E "cryptography[>=<]+" || echo "cryptography>=44.0.0")
+C7N_REQUESTS_VERSION=$(pip show c7n-policystream 2>/dev/null | grep -E "requests[>=<]+" || echo "requests>=2.32.0")
+
+print_info "Installing compatible dependency versions..."
+pip install --force-reinstall cryptography>=44.0.0
+pip install --force-reinstall requests>=2.32.0
+pip install --force-reinstall PyJWT>=2.8.0
 pip install --force-reinstall decorator>=4.4.0
 pip install --force-reinstall boto3>=1.26.0
 pip install --force-reinstall botocore>=1.29.0
@@ -65,7 +76,7 @@ pip install --force-reinstall python-dateutil>=2.8.0
 pip install --force-reinstall pyyaml>=5.4.0
 pip install --force-reinstall tabulate>=0.8.0
 
-# Install c7n-mailer last to ensure compatibility
+# Final installation to ensure everything is compatible
 pip install --force-reinstall 'c7n-mailer>=0.6.20'
 
 print_status "All dependencies installed successfully"
@@ -87,7 +98,7 @@ cp "$DEPLOY_PY" "$DEPLOY_PY.backup.$(date +%Y%m%d_%H%M%S)"
 print_status "Backup created: $DEPLOY_PY.backup.$(date +%Y%m%d_%H%M%S)"
 
 # Apply the community fix: Add 'jwt' to CORE_DEPS
-python3 << 'EOF'
+python3 - "$DEPLOY_PY" << 'EOF'
 import re
 import sys
 
