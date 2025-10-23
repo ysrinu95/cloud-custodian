@@ -29,7 +29,7 @@ on:
         type: boolean
 
 env:
-  AWS_REGION: 'us-east-1'
+  AWS_REGION: 'us-west-2'
 
 jobs:
   deploy-with-scripts:
@@ -155,6 +155,21 @@ jobs:
           
           ./scripts/deploy-updated-policies.sh
           echo "✅ Deploy updated policies script completed"
+      
+      - name: Apply PyJWT Packaging Fix
+        if: github.event.inputs.script_action == 'deploy-mailer'
+        run: |
+          echo "🔧 Applying community fix for PyJWT packaging issue..."
+          cd c7n
+          
+          # Find deploy.py and apply the fix
+          DEPLOY_PY=$(python -c "import c7n_mailer.deploy; print(c7n_mailer.deploy.__file__)" 2>/dev/null || echo "")
+          if [ -n "$DEPLOY_PY" ]; then
+            echo "Found deploy.py at: $DEPLOY_PY"
+            python scripts/fix-core-deps.py || echo "Fix script not needed or already applied"
+          else
+            echo "⚠️ Could not locate deploy.py - fix will be applied by deploy script"
+          fi
       
       - name: Run Deploy Mailer Script
         if: github.event.inputs.script_action == 'deploy-mailer'

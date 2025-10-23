@@ -1,5 +1,5 @@
 # mailer queue settings
-queue_url: https://sqs.us-west-2.amazonaws.com/172327596604/custodian-mailer-queue
+queue_url: https://sqs.us-west-2.amazonaws.com/172327596604/c7n-mailer-test
 role: arn:aws:iam::172327596604:role/CloudCustodian-Lambda-ExecutionRole
 region: us-west-2
 
@@ -16,4 +16,4 @@ contact_tags:
   - owner
 
 # sender address for email notify
-from_address: CloudAdmin@optum.com
+from_address: ysrinu95@gmail.com
