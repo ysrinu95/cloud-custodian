@@ -73,6 +73,9 @@ jobs:
             pip install python-dateutil>=2.8.0
             pip install pyyaml>=5.4.0
             pip install tabulate>=0.8.0
+            pip install PyJWT>=2.0.0
+            pip install cryptography>=3.0.0
+            pip install requests>=2.25.0
             echo "✅ Mailer dependencies installed"
           fi
           
