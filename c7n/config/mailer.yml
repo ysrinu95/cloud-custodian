@@ -1,6 +1,6 @@
 # mailer queue settings
-queue_url: https://sqs.us-west-2.amazonaws.com/140253569749/custodian-mailer-queue
-role: arn:aws:iam::140253569749:role/devops/cloud-custodian
+queue_url: https://sqs.us-west-2.amazonaws.com/172327596604/custodian-mailer-queue
+role: arn:aws:iam::172327596604:role/CloudCustodian-Lambda-ExecutionRole
 region: us-west-2
 
 # lambda function settings
