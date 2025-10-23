@@ -64,19 +64,23 @@ jobs:
           
           # Install additional c7n packages for mailer if needed
           if [ "${{ github.event.inputs.script_action }}" = "deploy-mailer" ]; then
-            echo "📧 Installing mailer dependencies..."
-            pip install c7n-mailer
-            pip install decorator>=4.4.0
-            pip install boto3>=1.26.0
-            pip install botocore>=1.29.0
-            pip install jsonschema>=3.0.0
-            pip install python-dateutil>=2.8.0
-            pip install pyyaml>=5.4.0
-            pip install tabulate>=0.8.0
-            pip install PyJWT>=2.0.0
-            pip install cryptography>=3.0.0
-            pip install requests>=2.25.0
-            echo "✅ Mailer dependencies installed"
+            echo "📧 Installing comprehensive mailer dependencies..."
+            pip install --upgrade pip setuptools wheel
+            pip install --force-reinstall PyJWT>=2.0.0
+            pip install --force-reinstall cryptography>=3.0.0
+            pip install --force-reinstall requests>=2.25.0
+            pip install --force-reinstall decorator>=4.4.0
+            pip install --force-reinstall boto3>=1.26.0
+            pip install --force-reinstall botocore>=1.29.0
+            pip install --force-reinstall jsonschema>=3.0.0
+            pip install --force-reinstall python-dateutil>=2.8.0
+            pip install --force-reinstall pyyaml>=5.4.0
+            pip install --force-reinstall tabulate>=0.8.0
+            pip install --force-reinstall c7n-mailer>=0.6.20
+            
+            echo "🔍 Verifying PyJWT installation..."
+            python -c "import jwt; print(f'✅ PyJWT {jwt.__version__} installed successfully')"
+            echo "✅ All mailer dependencies installed and verified"
           fi
           
           echo "✅ Installation complete"

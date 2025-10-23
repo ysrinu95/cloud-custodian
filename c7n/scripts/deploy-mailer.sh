@@ -4,10 +4,24 @@
 config=config/mailer.yml
 templates_dir=config/mailer-templates
 
-echo "🔧 Installing mailer runtime dependencies..."
-pip install PyJWT>=2.0.0 cryptography>=3.0.0 requests>=2.25.0
+echo "🔧 Setting up clean environment for mailer deployment..."
 
-echo "📧 Deploying c7n-mailer..."
+# Install all dependencies including PyJWT in current environment
+echo "📦 Installing all mailer dependencies..."
+pip install --upgrade pip setuptools wheel
+pip install --force-reinstall PyJWT>=2.0.0
+pip install --force-reinstall cryptography>=3.0.0  
+pip install --force-reinstall requests>=2.25.0
+pip install --force-reinstall decorator>=4.4.0
+pip install --force-reinstall c7n>=0.9.21
+pip install --force-reinstall c7n-mailer>=0.6.20
+
+echo "📦 Verifying critical dependencies..."
+python -c "import jwt; print(f'✅ PyJWT version: {jwt.__version__}')" || echo "❌ PyJWT not available"
+python -c "import cryptography; print('✅ cryptography available')" || echo "❌ cryptography not available"
+python -c "import c7n_mailer; print('✅ c7n-mailer available')" || echo "❌ c7n-mailer not available"
+
+echo "📧 Deploying c7n-mailer with --update-lambda..."
 c7n-mailer --config $config -t $templates_dir --update-lambda
 
 echo "✅ Mailer deployment complete"
