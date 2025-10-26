@@ -6,12 +6,12 @@ vars:
   email-notify: &email-notify
     template: aws-basic_email.html
     to:
-      - ysrinu95@gmail.om
+      - ysrinu95@gmail.com
       - event-owner
       - resource-owner
     transport:
       type: sqs
-      queue: https://sqs.us-west-2.amazonaws.com/YOUR_AWS_ACCOUNT_ID/custodian-mailer-queue
+      queue: https://sqs.us-east-1.amazonaws.com/172327596604/custodian-mailer-queue
 
 policies:
   - name: aws-cloudwatch-stale-log-groups
@@ -21,7 +21,7 @@ policies:
     mode:
       type: periodic
       schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
-      role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+      role: arn:aws:iam::{account_id}:role/cloud-custodian/CloudCustodian-ExecutionRole
       tags: *tags
     filters:
       # not written to in last year
@@ -51,7 +51,7 @@ policies:
     mode:
       type: periodic
       schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
-      role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+      role: arn:aws:iam::{account_id}:role/cloud-custodian/CloudCustodian-ExecutionRole
       tags: *tags
     filters:
      - type: value
@@ -76,7 +76,7 @@ policies:
     mode:
       type: periodic
       schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
-      role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+      role: arn:aws:iam::{account_id}:role/cloud-custodian/CloudCustodian-ExecutionRole
       tags: *tags
     filters:
       - retentionInDays: absent

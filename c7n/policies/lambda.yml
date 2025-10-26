@@ -1,6 +1,6 @@
 vars:
   tags: &tags
-    contact: ysrinu95@gmail.om
+    contact: ysrinu95@gmail.com
     environment: "{environment}"
     repo: devops/cloud-custodian/c7n
   slack-notify: &slack-notify
@@ -11,16 +11,16 @@ vars:
       - https://hooks.slack.com/services/YOUR_SLACK_WORKSPACE/YOUR_SLACK_CHANNEL/YOUR_SLACK_TOKEN # cloud-custodian channel
     transport:
       type: sqs
-      queue: https://sqs.us-west-2.amazonaws.com/YOUR_AWS_ACCOUNT_ID/custodian-mailer-queue
+      queue: https://sqs.us-east-1.amazonaws.com/172327596604/custodian-mailer-queue
   email-notify: &email-notify
     template: aws-basic_email.html
     to:
-      - ysrinu95@gmail.om
+      - ysrinu95@gmail.com
       - event-owner
       - resource-owner
     transport:
       type: sqs
-      queue: https://sqs.us-west-2.amazonaws.com/YOUR_AWS_ACCOUNT_ID/custodian-mailer-queue
+      queue: https://sqs.us-east-1.amazonaws.com/172327596604/custodian-mailer-queue
 
 # LAMBDA RUNTIME DEPRECATION DATES
 #  https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html
@@ -36,7 +36,7 @@ policies:
     mode:
       type: periodic
       schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
-      role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+      role: arn:aws:iam::{account_id}:role/cloud-custodian/CloudCustodian-ExecutionRole
       tags: *tags
     filters:
       - type: value
@@ -67,7 +67,7 @@ policies:
     mode:
       type: periodic
       schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
-      role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+      role: arn:aws:iam::{account_id}:role/cloud-custodian/CloudCustodian-ExecutionRole
       tags: *tags
     filters:
       - type: value
@@ -97,7 +97,7 @@ policies:
       Notify when a Lambda function is created with an outdated runtime.
     mode:
       type: cloudtrail
-      role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+      role: arn:aws:iam::{account_id}:role/cloud-custodian/CloudCustodian-ExecutionRole
       events:
         - CreateFunction
     filters:
@@ -122,7 +122,7 @@ policies:
     mode:
       type: periodic
       schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
-      role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
+      role: arn:aws:iam::{account_id}:role/cloud-custodian/CloudCustodian-ExecutionRole
       tags: *tags
     filters:
       # not invoked in last year
