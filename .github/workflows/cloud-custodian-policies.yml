@@ -583,6 +583,10 @@ jobs:
       id-token: write
       contents: read
     
+    outputs:
+      deployment-status: ${{ steps.deployment.outputs.status }}
+      deployed-policies: ${{ steps.deployment.outputs.policies }}
+    
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -592,11 +596,253 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       
-      - name: Deploy Policies
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-c7n-Deploy-${{ github.run_number }}
+      
+      - name: Install Cloud Custodian and Dependencies
         run: |
-          echo "🚀 Deploying Cloud Custodian policies..."
+          echo "📦 Installing Cloud Custodian ecosystem..."
+          pip install --upgrade pip
+          
+          # Install core Cloud Custodian packages
+          pip install 'c7n>=0.9.40'
+          pip install c7n-org
+          
+          # Install mailer dependencies if needed
+          if [[ "${{ github.event.inputs.operation_type }}" == "deploy-mailer" ]]; then
+            echo "📧 Installing mailer dependencies..."
+            pip install --upgrade pip setuptools wheel
+            
+            # Use specific versions to avoid conflicts
+            pip install --force-reinstall PyJWT==2.8.0
+            pip install --force-reinstall cryptography==44.0.0
+            pip install --force-reinstall requests==2.32.4
+            pip install --force-reinstall decorator>=4.4.0
+            pip install --force-reinstall boto3>=1.26.0
+            pip install --force-reinstall botocore>=1.29.0
+            pip install --force-reinstall jsonschema>=3.0.0
+            pip install --force-reinstall python-dateutil>=2.8.0
+            pip install --force-reinstall pyyaml>=5.4.0
+            pip install --force-reinstall tabulate>=0.8.0
+            pip install --force-reinstall c7n-mailer>=0.6.20
+            
+            echo "🔍 Verifying PyJWT installation..."
+            python -c "import jwt; print(f'✅ PyJWT {jwt.__version__} installed successfully')"
+          fi
+          
+          # Install additional requirements if present
+          if [ -f "c7n/requirements.txt" ]; then
+            pip install -r c7n/requirements.txt
+            echo "✅ Installed additional requirements"
+          fi
+          
+          # Install system dependencies
+          sudo apt-get update && sudo apt-get install -y jq
+          
+          echo "✅ Installation complete"
+          custodian version
+      
+      - name: Make Scripts Executable
+        run: |
+          echo "🔧 Making c7n scripts executable..."
+          chmod +x c7n/scripts/*.sh
+          echo "✅ Scripts are now executable"
+      
+      - name: Set Deployment Environment Variables
+        run: |
+          echo "🔧 Setting deployment environment variables..."
+          
+          # Set target accounts based on input
+          TARGET_ACCOUNTS="${{ github.event.inputs.target_accounts }}"
+          if [[ -z "$TARGET_ACCOUNTS" || "$TARGET_ACCOUNTS" == "" ]]; then
+            TARGET_ACCOUNTS="engg"
+          fi
+          echo "TARGET_ACCOUNTS=$TARGET_ACCOUNTS" >> $GITHUB_ENV
+          
+          # Set regions
+          REGIONS="${{ github.event.inputs.regions }}"
+          if [[ -z "$REGIONS" || "$REGIONS" == "" ]]; then
+            REGIONS="us-east-1"
+          fi
+          echo "REGIONS=$REGIONS" >> $GITHUB_ENV
+          
+          # Set dry-run mode
+          DRY_RUN="${{ github.event.inputs.dry_run }}"
+          echo "DRY_RUN=$DRY_RUN" >> $GITHUB_ENV
+          
+          echo "✅ Environment variables set:"
+          echo "  - Target Accounts: $TARGET_ACCOUNTS"
+          echo "  - Regions: $REGIONS"
+          echo "  - Dry Run: $DRY_RUN"
+      
+      - name: Deploy Policies
+        id: deployment
+        run: |
+          echo "🚀 Deploying Cloud Custodian Policies"
+          echo "════════════════════════════════════════════════════════"
           echo "Operation: ${{ github.event.inputs.operation_type }}"
-          echo "✅ Policy deployment completed"
+          echo "Target Accounts: $TARGET_ACCOUNTS"
+          echo "Regions: $REGIONS"
+          echo "Dry Run: $DRY_RUN"
+          echo ""
+          
+          cd c7n
+          deployment_failed=false
+          deployed_policies=""
+          
+          # Create output directory
+          mkdir -p output logs
+          
+          case "${{ github.event.inputs.operation_type }}" in
+            "deploy-all")
+              echo "🎯 Running deploy-all operation..."
+              if [[ "$DRY_RUN" == "true" ]]; then
+                echo "🔍 Running in dry-run mode..."
+                export DRY_RUN=true
+              fi
+              
+              echo "📋 Executing: ./scripts/deploy-policies.sh"
+              if ./scripts/deploy-policies.sh; then
+                echo "✅ Deploy-all completed successfully"
+                deployed_policies=$(find policies/ -name "*.yml" -exec basename {} .yml \; | tr '\n' ',' | sed 's/,$//')
+              else
+                echo "❌ Deploy-all failed"
+                deployment_failed=true
+              fi
+              ;;
+              
+            "deploy-updated")
+              echo "🔄 Running deploy-updated operation..."
+              if [[ "$DRY_RUN" == "true" ]]; then
+                echo "🔍 Running in dry-run mode..."
+                export DRY_RUN=true
+              fi
+              
+              echo "📋 Executing: ./scripts/deploy-updated-policies.sh"
+              if ./scripts/deploy-updated-policies.sh; then
+                echo "✅ Deploy-updated completed successfully"
+                # Try to detect which policies were updated
+                deployed_policies=$(git diff --name-only HEAD~1 HEAD -- policies/ | xargs -I {} basename {} .yml | tr '\n' ',' | sed 's/,$//' || echo "updated-policies")
+              else
+                echo "❌ Deploy-updated failed"
+                deployment_failed=true
+              fi
+              ;;
+              
+            "deploy-mailer")
+              echo "📧 Running deploy-mailer operation..."
+              
+              # Apply PyJWT fix if needed
+              echo "🔧 Applying PyJWT packaging fix..."
+              if [[ -f "scripts/fix-core-deps.py" ]]; then
+                python scripts/fix-core-deps.py || echo "Fix script not needed or already applied"
+              fi
+              
+              echo "📋 Executing: ./scripts/deploy-mailer.sh"
+              if ./scripts/deploy-mailer.sh; then
+                echo "✅ Deploy-mailer completed successfully"
+                deployed_policies="mailer-service"
+              else
+                echo "❌ Deploy-mailer failed"
+                deployment_failed=true
+              fi
+              ;;
+              
+            "cleanup")
+              echo "🧹 Running cleanup operation..."
+              echo "📋 Executing: ./scripts/clean-removed-policies.sh"
+              if ./scripts/clean-removed-policies.sh; then
+                echo "✅ Cleanup completed successfully"
+                deployed_policies="cleanup-completed"
+              else
+                echo "❌ Cleanup failed"
+                deployment_failed=true
+              fi
+              ;;
+              
+            *)
+              echo "❌ Unknown operation type: ${{ github.event.inputs.operation_type }}"
+              deployment_failed=true
+              ;;
+          esac
+          
+          echo ""
+          echo "📊 Deployment Summary:"
+          echo "════════════════════════════════════════════════════════"
+          echo "Operation: ${{ github.event.inputs.operation_type }}"
+          echo "Status: $([ "$deployment_failed" = true ] && echo "❌ FAILED" || echo "✅ SUCCESS")"
+          echo "Deployed Policies: $deployed_policies"
+          echo "Dry Run Mode: $DRY_RUN"
+          echo ""
+          
+          # Set outputs
+          echo "policies=$deployed_policies" >> $GITHUB_OUTPUT
+          
+          if [[ "$deployment_failed" == true ]]; then
+            echo "status=failed" >> $GITHUB_OUTPUT
+            echo "❌ DEPLOYMENT FAILED"
+            echo "🔍 Check logs and artifacts for detailed error information"
+            exit 1
+          else
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "✅ DEPLOYMENT COMPLETED SUCCESSFULLY"
+            echo "🎯 All operations completed without errors"
+          fi
+      
+      - name: Upload Deployment Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-output-${{ github.run_number }}
+          path: |
+            c7n/output/
+            c7n/logs/
+          retention-days: 30
+      
+      - name: Generate Deployment Report
+        if: always()
+        run: |
+          echo "📊 Cloud Custodian Deployment Report" >> $GITHUB_STEP_SUMMARY
+          echo "====================================" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Operation**: ${{ github.event.inputs.operation_type }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Status**: ${{ steps.deployment.outputs.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Target Accounts**: $TARGET_ACCOUNTS" >> $GITHUB_STEP_SUMMARY
+          echo "**Regions**: $REGIONS" >> $GITHUB_STEP_SUMMARY
+          echo "**Dry Run**: $DRY_RUN" >> $GITHUB_STEP_SUMMARY
+          echo "**Deployed Policies**: ${{ steps.deployment.outputs.policies }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "## 🛠️ Deployment Scripts Used" >> $GITHUB_STEP_SUMMARY
+          case "${{ github.event.inputs.operation_type }}" in
+            "deploy-all")
+              echo "- **Script**: \`c7n/scripts/deploy-policies.sh\`" >> $GITHUB_STEP_SUMMARY
+              echo "- **Purpose**: Deploy all Cloud Custodian policies" >> $GITHUB_STEP_SUMMARY
+              ;;
+            "deploy-updated")
+              echo "- **Script**: \`c7n/scripts/deploy-updated-policies.sh\`" >> $GITHUB_STEP_SUMMARY
+              echo "- **Purpose**: Deploy only changed/updated policies" >> $GITHUB_STEP_SUMMARY
+              ;;
+            "deploy-mailer")
+              echo "- **Script**: \`c7n/scripts/deploy-mailer.sh\`" >> $GITHUB_STEP_SUMMARY
+              echo "- **Purpose**: Deploy notification mailer service" >> $GITHUB_STEP_SUMMARY
+              ;;
+            "cleanup")
+              echo "- **Script**: \`c7n/scripts/clean-removed-policies.sh\`" >> $GITHUB_STEP_SUMMARY
+              echo "- **Purpose**: Clean up removed policy resources" >> $GITHUB_STEP_SUMMARY
+              ;;
+          esac
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "## 📁 Resources" >> $GITHUB_STEP_SUMMARY
+          echo "- **Policy Files**: \`c7n/policies/*.yml\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Deployment Scripts**: \`c7n/scripts/\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Configuration**: \`c7n/config/\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Artifacts**: Available in workflow artifacts" >> $GITHUB_STEP_SUMMARY
 
   validate-deployed-lambdas:
     name: 'Validate Deployed Lambda Functions'
