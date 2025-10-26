@@ -15,6 +15,8 @@ on:
         - deploy-all
         - deploy-mailer
         - cleanup
+        # Lambda Validation
+        - validate-lambdas
         # Verification & Setup
         - verify-deployment
         - complete-setup-validation
@@ -596,10 +598,542 @@ jobs:
           echo "Operation: ${{ github.event.inputs.operation_type }}"
           echo "✅ Policy deployment completed"
 
+  validate-deployed-lambdas:
+    name: 'Validate Deployed Lambda Functions'
+    runs-on: ubuntu-latest
+    needs: [deploy]
+    if: |
+      github.event_name == 'workflow_dispatch' && 
+      contains(github.event.inputs.operation_type, 'deploy') &&
+      needs.deploy.result == 'success'
+    
+    permissions:
+      id-token: write
+      contents: read
+    
+    outputs:
+      lambda-validation-passed: ${{ steps.lambda-validation.outputs.passed }}
+      lambda-count: ${{ steps.lambda-validation.outputs.lambda-count }}
+      active-lambdas: ${{ steps.lambda-validation.outputs.active-lambdas }}
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-lambda-validation-${{ github.run_number }}
+      
+      - name: Install Dependencies
+        run: |
+          pip install --upgrade pip
+          pip install c7n c7n-org c7n-mailer
+          sudo apt-get update && sudo apt-get install -y jq
+      
+      - name: Validate Deployed Lambda Functions
+        id: lambda-validation
+        run: |
+          echo "🔍 Validating Cloud Custodian Lambda Functions in AWS"
+          echo "════════════════════════════════════════════════════════"
+          echo "Checking deployed Lambda functions and their configurations..."
+          echo ""
+          
+          # Set target regions based on input
+          REGIONS="${{ github.event.inputs.regions }}"
+          if [[ -z "$REGIONS" || "$REGIONS" == "" ]]; then
+            REGIONS="us-east-1"
+          fi
+          echo "🌍 Target regions: $REGIONS"
+          
+          # Convert comma-separated regions to array
+          IFS=',' read -ra REGION_ARRAY <<< "$REGIONS"
+          
+          total_lambdas=0
+          total_active=0
+          total_errors=0
+          all_lambda_details=""
+          validation_failed=false
+          
+          for region in "${REGION_ARRAY[@]}"; do
+            region=$(echo "$region" | xargs)  # Trim whitespace
+            echo ""
+            echo "🔍 Checking region: $region"
+            echo "─────────────────────────────────"
+            
+            # Get all Cloud Custodian Lambda functions
+            echo "📋 Searching for Cloud Custodian Lambda functions..."
+            LAMBDA_FUNCTIONS=$(aws lambda list-functions \
+              --region "$region" \
+              --query 'Functions[?starts_with(FunctionName, `custodian`)].[FunctionName,State,LastModified,Runtime,Timeout,MemorySize]' \
+              --output text 2>/dev/null || echo "")
+            
+            if [[ -z "$LAMBDA_FUNCTIONS" ]]; then
+              echo "⚠️ No Cloud Custodian Lambda functions found in region: $region"
+              continue
+            fi
+            
+            region_lambda_count=0
+            region_active_count=0
+            
+            # Process each Lambda function
+            while IFS=$'\t' read -r func_name state last_modified runtime timeout memory; do
+              if [[ -n "$func_name" ]]; then
+                region_lambda_count=$((region_lambda_count + 1))
+                total_lambdas=$((total_lambdas + 1))
+                
+                echo ""
+                echo "📦 Function: $func_name"
+                echo "   📊 State: $state"
+                echo "   🕒 Last Modified: $last_modified"
+                echo "   ⚙️ Runtime: $runtime"
+                echo "   ⏱️ Timeout: ${timeout}s"
+                echo "   💾 Memory: ${memory}MB"
+                
+                # Check if function is active/ready
+                if [[ "$state" == "Active" ]]; then
+                  region_active_count=$((region_active_count + 1))
+                  total_active=$((total_active + 1))
+                  echo "   ✅ Status: Active and Ready"
+                  
+                  # Get additional function details
+                  func_details=$(aws lambda get-function \
+                    --function-name "$func_name" \
+                    --region "$region" \
+                    --query 'Configuration.[Description,Handler,Environment.Variables]' \
+                    --output text 2>/dev/null || echo "")
+                  
+                  # Check CloudWatch Events rules for this function
+                  related_rules=$(aws events list-rule-names-by-target \
+                    --targets "Id=1,Arn=arn:aws:lambda:$region:*:function:$func_name" \
+                    --region "$region" \
+                    --query 'RuleNames' \
+                    --output text 2>/dev/null || echo "")
+                  
+                  if [[ -n "$related_rules" && "$related_rules" != "None" ]]; then
+                    echo "   📅 CloudWatch Rules: $related_rules"
+                  fi
+                  
+                  # Test function configuration (basic validation)
+                  config_check=$(aws lambda get-function-configuration \
+                    --function-name "$func_name" \
+                    --region "$region" \
+                    --query '[State,StateReason]' \
+                    --output text 2>/dev/null || echo "Error")
+                  
+                  if [[ "$config_check" == *"Error"* ]]; then
+                    echo "   ⚠️ Configuration check failed"
+                    total_errors=$((total_errors + 1))
+                  else
+                    echo "   ✅ Configuration: Valid"
+                  fi
+                  
+                elif [[ "$state" == "Pending" ]]; then
+                  echo "   🟡 Status: Pending (deployment in progress)"
+                elif [[ "$state" == "Failed" ]]; then
+                  echo "   ❌ Status: Failed"
+                  total_errors=$((total_errors + 1))
+                  validation_failed=true
+                else
+                  echo "   ⚠️ Status: $state (unknown state)"
+                fi
+                
+                # Store function details for summary
+                all_lambda_details="${all_lambda_details}${region}:${func_name}:${state};"
+              fi
+            done <<< "$LAMBDA_FUNCTIONS"
+            
+            echo ""
+            echo "📊 Region Summary ($region):"
+            echo "   - Lambda functions found: $region_lambda_count"
+            echo "   - Active functions: $region_active_count"
+            echo ""
+          done
+          
+          # Check for CloudWatch Events rules
+          echo "🔍 Checking CloudWatch Events Rules..."
+          echo "─────────────────────────────────────"
+          for region in "${REGION_ARRAY[@]}"; do
+            region=$(echo "$region" | xargs)
+            
+            rules_count=$(aws events list-rules \
+              --name-prefix custodian \
+              --region "$region" \
+              --query 'length(Rules)' \
+              --output text 2>/dev/null || echo "0")
+            
+            if [[ "$rules_count" -gt 0 ]]; then
+              echo "✅ Found $rules_count CloudWatch Events rules in $region"
+              
+              # List the rules
+              aws events list-rules \
+                --name-prefix custodian \
+                --region "$region" \
+                --query 'Rules[].{Name:Name,State:State,ScheduleExpression:ScheduleExpression}' \
+                --output table 2>/dev/null || echo "Error listing rules"
+            else
+              echo "⚠️ No CloudWatch Events rules found in $region"
+            fi
+          done
+          
+          echo ""
+          echo "📊 FINAL VALIDATION SUMMARY"
+          echo "════════════════════════════════════════════════════════"
+          echo "🌍 Regions checked: $(echo "$REGIONS" | tr ',' ' ')"
+          echo "📦 Total Lambda functions found: $total_lambdas"
+          echo "✅ Active Lambda functions: $total_active"
+          echo "❌ Failed/Error functions: $total_errors"
+          echo ""
+          
+          # Set outputs
+          echo "lambda-count=$total_lambdas" >> $GITHUB_OUTPUT
+          echo "active-lambdas=$total_active" >> $GITHUB_OUTPUT
+          
+          # Determine validation result
+          if [[ "$total_lambdas" -eq 0 ]]; then
+            echo "⚠️ VALIDATION WARNING: No Cloud Custodian Lambda functions found"
+            echo "💡 This might indicate:"
+            echo "   - Policies are not configured for Lambda deployment (mode: periodic/cloudtrail)"
+            echo "   - Deployment failed silently"
+            echo "   - Functions are deployed with different naming convention"
+            echo "   - Wrong region specified"
+            echo ""
+            echo "🔍 Recommendation: Check deployment logs and ensure policies have appropriate modes"
+            echo "passed=warning" >> $GITHUB_OUTPUT
+          elif [[ "$validation_failed" == true || "$total_errors" -gt 0 ]]; then
+            echo "❌ VALIDATION FAILED: Some Lambda functions have errors"
+            echo "🚫 Deployment validation unsuccessful"
+            echo "passed=false" >> $GITHUB_OUTPUT
+            exit 1
+          elif [[ "$total_active" -eq "$total_lambdas" && "$total_lambdas" -gt 0 ]]; then
+            echo "✅ VALIDATION PASSED: All Lambda functions are active and healthy"
+            echo "🎯 Deployment validation successful"
+            echo "📈 Success rate: 100% ($total_active/$total_lambdas)"
+            echo "passed=true" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️ VALIDATION PARTIAL: Some functions may still be deploying"
+            echo "📊 Active functions: $total_active/$total_lambdas"
+            echo "💡 Some functions might still be in 'Pending' state"
+            echo "passed=partial" >> $GITHUB_OUTPUT
+          fi
+          
+          echo ""
+          echo "✅ Lambda function validation completed"
+
+  # ==============================================================================
+  # Standalone Lambda Validation Job (can be triggered independently)
+  # ==============================================================================
+  
+  validate-lambdas:
+    name: 'Validate Lambda Functions (Standalone)'
+    runs-on: ubuntu-latest
+    if: github.event.inputs.operation_type == 'validate-lambdas'
+    
+    permissions:
+      id-token: write
+      contents: read
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-standalone-lambda-validation-${{ github.run_number }}
+      
+      - name: Install Dependencies
+        run: |
+          pip install --upgrade pip
+          pip install c7n c7n-org c7n-mailer
+          sudo apt-get update && sudo apt-get install -y jq
+      
+      - name: Standalone Lambda Function Validation
+        run: |
+          echo "🔍 Standalone Cloud Custodian Lambda Function Validation"
+          echo "════════════════════════════════════════════════════════════"
+          echo "Comprehensive check of all deployed Lambda functions and configurations"
+          echo ""
+          
+          # Set target regions based on input
+          REGIONS="${{ github.event.inputs.regions }}"
+          if [[ -z "$REGIONS" || "$REGIONS" == "" ]]; then
+            REGIONS="us-east-1"
+          fi
+          echo "🌍 Target regions: $REGIONS"
+          
+          # Set target accounts based on input
+          TARGET_ACCOUNTS="${{ github.event.inputs.target_accounts }}"
+          if [[ -z "$TARGET_ACCOUNTS" || "$TARGET_ACCOUNTS" == "" ]]; then
+            TARGET_ACCOUNTS="engg"
+          fi
+          echo "🏢 Target accounts: $TARGET_ACCOUNTS"
+          echo ""
+          
+          # Convert comma-separated regions to array
+          IFS=',' read -ra REGION_ARRAY <<< "$REGIONS"
+          
+          total_lambdas=0
+          total_active=0
+          total_errors=0
+          validation_failed=false
+          
+          for region in "${REGION_ARRAY[@]}"; do
+            region=$(echo "$region" | xargs)  # Trim whitespace
+            echo ""
+            echo "🔍 Validating region: $region"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            
+            # Get all Cloud Custodian Lambda functions with detailed info
+            echo "📋 Discovering Cloud Custodian Lambda functions..."
+            LAMBDA_FUNCTIONS=$(aws lambda list-functions \
+              --region "$region" \
+              --query 'Functions[?starts_with(FunctionName, `custodian`)].[FunctionName,State,LastModified,Runtime,Timeout,MemorySize,CodeSize,Description]' \
+              --output text 2>/dev/null || echo "")
+            
+            if [[ -z "$LAMBDA_FUNCTIONS" ]]; then
+              echo "⚠️ No Cloud Custodian Lambda functions found in region: $region"
+              echo "💡 Expected function name pattern: custodian-*"
+              continue
+            fi
+            
+            region_lambda_count=0
+            region_active_count=0
+            region_error_count=0
+            
+            # Process each Lambda function with detailed validation
+            while IFS=$'\t' read -r func_name state last_modified runtime timeout memory code_size description; do
+              if [[ -n "$func_name" ]]; then
+                region_lambda_count=$((region_lambda_count + 1))
+                total_lambdas=$((total_lambdas + 1))
+                
+                echo ""
+                echo "📦 Function: $func_name"
+                echo "   📊 State: $state"
+                echo "   🕒 Last Modified: $last_modified"
+                echo "   ⚙️ Runtime: $runtime"
+                echo "   ⏱️ Timeout: ${timeout}s"
+                echo "   💾 Memory: ${memory}MB"
+                echo "   📦 Code Size: ${code_size} bytes"
+                echo "   📝 Description: $description"
+                
+                # Detailed function configuration validation
+                echo "   🔍 Running detailed validation..."
+                
+                # 1. Check function state and configuration
+                func_config=$(aws lambda get-function-configuration \
+                  --function-name "$func_name" \
+                  --region "$region" \
+                  --query '{State:State,StateReason:StateReason,LastUpdateStatus:LastUpdateStatus,PackageType:PackageType}' \
+                  --output json 2>/dev/null || echo "{}")
+                
+                if [[ "$func_config" != "{}" ]]; then
+                  func_state=$(echo "$func_config" | jq -r '.State // "Unknown"')
+                  state_reason=$(echo "$func_config" | jq -r '.StateReason // "None"')
+                  update_status=$(echo "$func_config" | jq -r '.LastUpdateStatus // "Unknown"')
+                  package_type=$(echo "$func_config" | jq -r '.PackageType // "Unknown"')
+                  
+                  echo "   ├─ Function State: $func_state"
+                  echo "   ├─ State Reason: $state_reason"
+                  echo "   ├─ Last Update Status: $update_status"
+                  echo "   └─ Package Type: $package_type"
+                  
+                  if [[ "$func_state" == "Active" && "$update_status" == "Successful" ]]; then
+                    region_active_count=$((region_active_count + 1))
+                    total_active=$((total_active + 1))
+                    echo "   ✅ Status: Healthy and Active"
+                  else
+                    region_error_count=$((region_error_count + 1))
+                    total_errors=$((total_errors + 1))
+                    validation_failed=true
+                    echo "   ❌ Status: Issues detected"
+                  fi
+                else
+                  echo "   ❌ Failed to get function configuration"
+                  region_error_count=$((region_error_count + 1))
+                  total_errors=$((total_errors + 1))
+                  validation_failed=true
+                fi
+                
+                # 2. Check CloudWatch Events/EventBridge rules
+                echo "   🔍 Checking associated CloudWatch Events..."
+                related_rules=$(aws events list-targets-by-rule \
+                  --region "$region" \
+                  --query "Targets[?contains(Arn, '$func_name')].Id" \
+                  --output text 2>/dev/null || echo "")
+                
+                if [[ -n "$related_rules" && "$related_rules" != "None" ]]; then
+                  echo "   ├─ 📅 Associated CloudWatch Rules: Found"
+                  
+                  # Get rule details
+                  rules_for_function=$(aws events list-rules \
+                    --region "$region" \
+                    --query "Rules[?State=='ENABLED'].Name" \
+                    --output text 2>/dev/null || echo "")
+                  
+                  rule_count=$(echo "$rules_for_function" | wc -w)
+                  echo "   └─ 📊 Active Rules Count: $rule_count"
+                else
+                  echo "   └─ ⚠️ No CloudWatch Events rules found"
+                fi
+                
+                # 3. Check recent executions and errors
+                echo "   🔍 Checking recent executions..."
+                
+                # Get CloudWatch logs for the function (last 24 hours)
+                log_group="/aws/lambda/$func_name"
+                
+                recent_errors=$(aws logs filter-log-events \
+                  --log-group-name "$log_group" \
+                  --region "$region" \
+                  --start-time $(( $(date +%s) * 1000 - 86400000 )) \
+                  --filter-pattern "ERROR" \
+                  --query 'length(events)' \
+                  --output text 2>/dev/null || echo "0")
+                
+                if [[ "$recent_errors" -gt 0 ]]; then
+                  echo "   ├─ ⚠️ Recent Errors: $recent_errors (last 24h)"
+                else
+                  echo "   ├─ ✅ Recent Errors: None (last 24h)"
+                fi
+                
+                # 4. Check function permissions and policies
+                echo "   ├─ 🔐 Checking IAM permissions..."
+                
+                execution_role=$(aws lambda get-function \
+                  --function-name "$func_name" \
+                  --region "$region" \
+                  --query 'Configuration.Role' \
+                  --output text 2>/dev/null || echo "")
+                
+                if [[ -n "$execution_role" && "$execution_role" != "None" ]]; then
+                  role_name=$(basename "$execution_role")
+                  echo "   ├─ 📋 Execution Role: $role_name"
+                  
+                  # Check if role exists and is accessible
+                  role_check=$(aws iam get-role --role-name "$role_name" --query 'Role.RoleName' --output text 2>/dev/null || echo "Error")
+                  if [[ "$role_check" != "Error" ]]; then
+                    echo "   └─ ✅ IAM Role: Accessible"
+                  else
+                    echo "   └─ ❌ IAM Role: Access issues"
+                  fi
+                else
+                  echo "   └─ ❌ Execution Role: Not found"
+                fi
+                
+                echo ""
+              fi
+            done <<< "$LAMBDA_FUNCTIONS"
+            
+            echo "📊 Region Summary ($region):"
+            echo "   ├─ Total Lambda functions: $region_lambda_count"
+            echo "   ├─ Active & Healthy: $region_active_count"
+            echo "   └─ With Issues: $region_error_count"
+            echo ""
+          done
+          
+          # Overall CloudWatch Events validation
+          echo ""
+          echo "🔍 Overall CloudWatch Events Validation"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
+          total_rules=0
+          for region in "${REGION_ARRAY[@]}"; do
+            region=$(echo "$region" | xargs)
+            
+            echo "📍 Region: $region"
+            
+            rules=$(aws events list-rules \
+              --name-prefix custodian \
+              --region "$region" \
+              --query 'Rules[].{Name:Name,State:State,ScheduleExpression:ScheduleExpression,EventPattern:EventPattern}' \
+              --output json 2>/dev/null || echo "[]")
+            
+            region_rules_count=$(echo "$rules" | jq 'length')
+            total_rules=$((total_rules + region_rules_count))
+            
+            if [[ "$region_rules_count" -gt 0 ]]; then
+              echo "   ✅ CloudWatch Rules: $region_rules_count found"
+              
+              # Show rule details
+              echo "$rules" | jq -r '.[] | "   ├─ \(.Name): \(.State) \(if .ScheduleExpression then "[\(.ScheduleExpression)]" else "[Event-driven]" end)"'
+            else
+              echo "   ⚠️ CloudWatch Rules: None found"
+            fi
+            echo ""
+          done
+          
+          # Final validation summary
+          echo ""
+          echo "📊 COMPREHENSIVE VALIDATION SUMMARY"
+          echo "════════════════════════════════════════════════════════════"
+          echo "🌍 Regions validated: $(echo "$REGIONS" | tr ',' ' ')"
+          echo "🏢 Target accounts: $TARGET_ACCOUNTS"
+          echo "📦 Total Lambda functions: $total_lambdas"
+          echo "✅ Active & Healthy functions: $total_active"
+          echo "❌ Functions with issues: $total_errors"
+          echo "📅 Total CloudWatch rules: $total_rules"
+          echo ""
+          
+          # Calculate success rate
+          if [[ "$total_lambdas" -gt 0 ]]; then
+            success_rate=$(( (total_active * 100) / total_lambdas ))
+            echo "📈 Success Rate: $success_rate% ($total_active/$total_lambdas)"
+          else
+            success_rate=0
+            echo "📈 Success Rate: N/A (no functions found)"
+          fi
+          echo ""
+          
+          # Final determination
+          if [[ "$total_lambdas" -eq 0 ]]; then
+            echo "⚠️ VALIDATION RESULT: NO FUNCTIONS FOUND"
+            echo "💡 Possible reasons:"
+            echo "   • No policies deployed with Lambda mode (periodic/cloudtrail)"
+            echo "   • Different function naming convention used"
+            echo "   • Wrong region or account specified"
+            echo "   • Deployment not yet completed"
+          elif [[ "$validation_failed" == true || "$total_errors" -gt 0 ]]; then
+            echo "❌ VALIDATION RESULT: FAILED"
+            echo "🚫 Some Lambda functions have critical issues"
+            echo "🔧 Recommendation: Review function logs and configurations"
+            exit 1
+          elif [[ "$success_rate" -eq 100 && "$total_lambdas" -gt 0 ]]; then
+            echo "✅ VALIDATION RESULT: PASSED"
+            echo "🎯 All Lambda functions are healthy and operational"
+            echo "🚀 Cloud Custodian deployment is fully functional"
+          elif [[ "$success_rate" -ge 80 ]]; then
+            echo "⚠️ VALIDATION RESULT: MOSTLY SUCCESSFUL"
+            echo "📊 Most functions are working but some issues detected"
+            echo "🔧 Recommendation: Review functions with issues"
+          else
+            echo "❌ VALIDATION RESULT: MULTIPLE ISSUES"
+            echo "🚫 Significant number of functions have problems"
+            echo "🔧 Recommendation: Review deployment and function configurations"
+            exit 1
+          fi
+          
+          echo ""
+          echo "✅ Standalone Lambda validation completed"
+
   notify:
     name: 'Demo Completion Notification'
     runs-on: ubuntu-latest
-    needs: [validate, deploy, verify-deployment, setup-validation, security-demo-guardduty, security-demo-config, security-demo-all, resource-demo-ec2, cleanup-demo-resources]
+    needs: [validate, deploy, validate-deployed-lambdas, validate-lambdas, verify-deployment, setup-validation, security-demo-guardduty, security-demo-config, security-demo-all, resource-demo-ec2, cleanup-demo-resources]
     if: always() && github.event_name == 'workflow_dispatch'
     
     steps:
@@ -610,6 +1144,42 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Operation**: ${{ github.event.inputs.operation_type }}" >> $GITHUB_STEP_SUMMARY
           echo "**Execution Time**: $(date)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Add Lambda validation results if deployment occurred
+          if [[ "${{ contains(github.event.inputs.operation_type, 'deploy') }}" == "true" ]]; then
+            echo "## 🔍 Lambda Validation Results" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            
+            lambda_validation_result="${{ needs.validate-deployed-lambdas.outputs.lambda-validation-passed }}"
+            lambda_count="${{ needs.validate-deployed-lambdas.outputs.lambda-count }}"
+            active_lambdas="${{ needs.validate-deployed-lambdas.outputs.active-lambdas }}"
+            
+            if [[ "$lambda_validation_result" == "true" ]]; then
+              echo "✅ **Lambda Validation**: PASSED" >> $GITHUB_STEP_SUMMARY
+              echo "📦 **Total Functions**: $lambda_count" >> $GITHUB_STEP_SUMMARY
+              echo "🟢 **Active Functions**: $active_lambdas" >> $GITHUB_STEP_SUMMARY
+              echo "📈 **Success Rate**: 100%" >> $GITHUB_STEP_SUMMARY
+            elif [[ "$lambda_validation_result" == "partial" ]]; then
+              echo "⚠️ **Lambda Validation**: PARTIAL SUCCESS" >> $GITHUB_STEP_SUMMARY
+              echo "📦 **Total Functions**: $lambda_count" >> $GITHUB_STEP_SUMMARY
+              echo "🟡 **Active Functions**: $active_lambdas" >> $GITHUB_STEP_SUMMARY
+              echo "💡 **Note**: Some functions may still be deploying" >> $GITHUB_STEP_SUMMARY
+            elif [[ "$lambda_validation_result" == "warning" ]]; then
+              echo "⚠️ **Lambda Validation**: WARNING" >> $GITHUB_STEP_SUMMARY
+              echo "📦 **Total Functions**: $lambda_count" >> $GITHUB_STEP_SUMMARY
+              echo "💡 **Note**: No Lambda functions found - policies may not be configured for Lambda deployment" >> $GITHUB_STEP_SUMMARY
+            elif [[ "$lambda_validation_result" == "false" ]]; then
+              echo "❌ **Lambda Validation**: FAILED" >> $GITHUB_STEP_SUMMARY
+              echo "📦 **Total Functions**: $lambda_count" >> $GITHUB_STEP_SUMMARY
+              echo "🔴 **Active Functions**: $active_lambdas" >> $GITHUB_STEP_SUMMARY
+              echo "⚠️ **Status**: Some Lambda functions have errors" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "❓ **Lambda Validation**: UNKNOWN" >> $GITHUB_STEP_SUMMARY
+              echo "💡 **Note**: Lambda validation may have been skipped" >> $GITHUB_STEP_SUMMARY
+            fi
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
 
       - name: Detect Changed Policies
         id: change-detection
