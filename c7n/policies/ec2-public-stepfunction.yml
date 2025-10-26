@@ -19,9 +19,9 @@ policies:
         value: running
       - or:
           # Check for instances with public IP addresses
-          - type: instance-attribute
-            attribute: public-ip-address
-            value: present
+          - type: value
+            key: PublicIpAddress
+            value: not-null
           # Check for instances in security groups allowing public access
           - type: security-group
             key: "GroupName"
@@ -35,7 +35,7 @@ policies:
             operator: contains
     actions:
       - type: invoke-sfn
-        state-machine: arn:aws:states:{region}:{account_id}:stateMachine:EC2PublicInstanceRemediation
+        state_machine: arn:aws:states:{region}:{account_id}:stateMachine:EC2PublicInstanceRemediation
         region: "{region}"
         async: true
         input:
@@ -84,7 +84,7 @@ policies:
             key: "custodian:stepfunction-processed"
     actions:
       - type: invoke-sfn
-        state-machine: arn:aws:states:{region}:{account_id}:stateMachine:EC2PublicInstanceRemediation
+        state_machine: arn:aws:states:{region}:{account_id}:stateMachine:EC2PublicInstanceRemediation
         region: "{region}"
         async: true
         input:

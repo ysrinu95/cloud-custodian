@@ -589,7 +589,8 @@ policies:
           key: NetworkInterfaces[].Association.PublicIp
           value: not-null
       # Exclude instances that are intentionally public (tagged)
-      - not:
+      - type: not
+        filters:
           - type: tag-key
             key: PublicInstanceApproved
     actions:
@@ -695,12 +696,15 @@ policies:
           key: NetworkInterfaces[].Association.PublicIp
           value: not-null
       # Exclude instances that are intentionally public
-      - not:
+      - type: not
+        filters:
           - type: tag-key
             key: PublicInstanceApproved
       # Skip instances already processed (tagged) in the last 6 hours
-      - not:
-          - and:
+      - type: not
+        filters:
+          - type: and
+            filters:
               - type: tag-key
                 key: SecurityFinding
               - type: tag-key
@@ -708,7 +712,7 @@ policies:
               - type: value
                 key: "Tags[?Key=='DetectionTime'].Value | [0]"
                 op: regex
-            value: ".*202[0-9]-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}.*"
+                value: ".*202[0-9]-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}.*"
     actions:
       # Invoke Step Function for automated remediation workflow
       - type: invoke-sfn
