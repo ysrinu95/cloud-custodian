@@ -360,7 +360,8 @@ resource "aws_s3_bucket_versioning" "custodian_logs" {
 # Cloud Custodian execution role (supports both Lambda and direct execution)
 resource "aws_iam_role" "custodian_execution" {
   name = "CloudCustodian-ExecutionRole"
-  path = "/cloud-custodian/"
+  # Remove path to match accounts.yml configuration
+  # path = "/cloud-custodian/"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -387,6 +388,14 @@ resource "aws_iam_role" "custodian_execution" {
           StringLike = {
             "token.actions.githubusercontent.com:sub" = "repo:${var.github_repository}:*"
           }
+        }
+      },
+      {
+        Sid    = "AllowAdminUserAssumeRole"
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:user/admin-user"
         }
       }
     ]
