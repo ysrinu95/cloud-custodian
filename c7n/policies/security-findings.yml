@@ -1,0 +1,797 @@
+policies:
+  # ============================================================================
+  # AWS GuardDuty Findings Policy
+  # ============================================================================
+  - name: guardduty-high-severity-findings
+    description: |
+      Respond to AWS GuardDuty high and critical severity findings in real-time.
+      This policy triggers on GuardDuty findings and takes automated remediation actions.
+    resource: aws.guardduty-finding
+    mode:
+      type: cloudtrail
+      events:
+        - source: aws.guardduty
+          event: CreateFinding
+          ids: "detail.id"
+      role: arn:aws:iam::757541135089:role/cloud-custodian
+      timeout: 300
+      tags:
+        contact: srinivasula.yallala@optum.com
+        repo: aikyam-everything-as-code
+        terraform: "True"
+        oid-owned: "True"
+        aide-id: UHGWM110-019726
+        service-tier: p1
+        application: cloud-custodian
+        managed-by: jenkins
+        environment: engg
+        component: cloud-custodian-policy
+        policy-type: security-findings
+        security-service: guardduty
+    filters:
+      # Only act on high and critical severity findings
+      - type: value
+        key: severity
+        op: gte
+        value: 7.0
+      # Filter specific threat types
+      - or:
+        - type: value
+          key: type
+          op: in
+          value:
+            - "UnauthorizedAccess:EC2/SSHBruteForce"
+            - "UnauthorizedAccess:EC2/RDPBruteForce"
+            - "CryptoCurrency:EC2/BitcoinTool.B!DNS"
+            - "Backdoor:EC2/C&CActivity.B!DNS"
+            - "Trojan:EC2/DNSDataExfiltration"
+            - "UnauthorizedAccess:IAMUser/MaliciousIPCaller.Custom"
+    actions:
+      # Tag the finding for tracking
+      - type: post-finding
+        compliance_status: FAILED
+        severity_label: HIGH
+        types:
+          - "Software and Configuration Checks/AWS Security Best Practices"
+      # Send notification via SNS/Slack
+      - type: notify
+        template: aws-guardduty-finding_slack
+        priority_header: "1"
+        slack_template: slack
+        violation_desc: "GuardDuty High Severity Finding Detected"
+        action_desc: |
+          A high or critical severity GuardDuty finding has been detected.
+          Immediate investigation and remediation required.
+        to:
+          - security-team@optum.com
+          - slack://security-alerts
+        transport:
+          type: sqs
+          queue: https://sqs.us-east-1.amazonaws.com/757541135089/custodian-mailer-queue
+
+  # ============================================================================
+  # AWS Config Rules Compliance Policy
+  # ============================================================================
+  - name: config-compliance-violations
+    description: |
+      Respond to AWS Config rule compliance violations in real-time.
+      This policy triggers when resources become non-compliant with Config rules.
+    resource: aws.config-rule
+    mode:
+      type: cloudtrail
+      events:
+        - source: aws.config
+          event: PutEvaluations
+          ids: "requestParameters.evaluations[].complianceResourceId"
+      role: arn:aws:iam::757541135089:role/cloud-custodian
+      timeout: 300
+      tags:
+        contact: srinivasula.yallala@optum.com
+        repo: aikyam-everything-as-code
+        terraform: "True"
+        oid-owned: "True"
+        aide-id: UHGWM110-019726
+        service-tier: p1
+        application: cloud-custodian
+        managed-by: jenkins
+        environment: engg
+        component: cloud-custodian-policy
+        policy-type: security-findings
+        security-service: config
+    filters:
+      # Only non-compliant resources
+      - type: value
+        key: compliance.ComplianceType
+        value: NON_COMPLIANT
+      # Critical Config rules
+      - type: value
+        key: ConfigRuleName
+        op: in
+        value:
+          - "encrypted-volumes"
+          - "s3-bucket-public-read-prohibited"
+          - "s3-bucket-public-write-prohibited"
+          - "iam-password-policy"
+          - "root-account-mfa-enabled"
+          - "restricted-ssh"
+          - "restricted-common-ports"
+    actions:
+      # Tag non-compliant resources
+      - type: invoke-lambda
+        function: custodian-config-compliance-tagger
+        async: true
+      # Send notification
+      - type: notify
+        template: aws-basic_email
+        priority_header: "2"
+        violation_desc: "AWS Config Rule Compliance Violation"
+        action_desc: |
+          A resource has become non-compliant with AWS Config rules.
+          Review and remediate the compliance violation.
+        to:
+          - compliance-team@optum.com
+        transport:
+          type: sqs
+          queue: https://sqs.us-east-1.amazonaws.com/757541135089/custodian-mailer-queue
+
+  # ============================================================================
+  # AWS Security Hub CSPM Findings Policy
+  # ============================================================================
+  - name: securityhub-critical-findings
+    description: |
+      Respond to AWS Security Hub critical and high severity findings from CSPM controls.
+      This includes AWS Foundational Security Best Practices and CIS benchmarks.
+    resource: aws.securityhub-finding
+    mode:
+      type: cloudtrail
+      events:
+        - source: aws.securityhub
+          event: BatchImportFindings
+          ids: "detail.findings[].Id"
+      role: arn:aws:iam::757541135089:role/cloud-custodian
+      timeout: 300
+      tags:
+        contact: srinivasula.yallala@optum.com
+        repo: aikyam-everything-as-code
+        terraform: "True"
+        oid-owned: "True"
+        aide-id: UHGWM110-019726
+        service-tier: p1
+        application: cloud-custodian
+        managed-by: jenkins
+        environment: engg
+        component: cloud-custodian-policy
+        policy-type: security-findings
+        security-service: securityhub
+    filters:
+      # Critical and High severity only
+      - type: value
+        key: Severity.Label
+        op: in
+        value: ["CRITICAL", "HIGH"]
+      # Only active findings
+      - type: value
+        key: RecordState
+        value: ACTIVE
+      # Filter by compliance standards
+      - or:
+        - type: value
+          key: ProductFields.StandardsArn
+          op: regex
+          value: ".*(aws-foundational-security-best-practices|cis-aws-foundations-benchmark).*"
+      # Specific control categories
+      - type: value
+        key: Types[0]
+        op: in
+        value:
+          - "Software and Configuration Checks/AWS Security Best Practices"
+          - "Effects/Data Exposure"
+          - "Unusual Behaviors"
+    actions:
+      # Update Security Hub finding with workflow status
+      - type: post-finding
+        compliance_status: FAILED
+        severity_label: HIGH
+        types:
+          - "Software and Configuration Checks/AWS Security Best Practices"
+      # Send notification
+      - type: notify
+        template: aws-securityhub-finding_slack
+        priority_header: "1"
+        slack_template: slack
+        violation_desc: "Security Hub Critical Finding Detected"
+        action_desc: |
+          A critical or high severity Security Hub finding has been detected.
+          This may indicate a security misconfiguration or vulnerability.
+        to:
+          - security-team@optum.com
+          - slack://security-alerts
+        transport:
+          type: sqs
+          queue: https://sqs.us-east-1.amazonaws.com/757541135089/custodian-mailer-queue
+
+  # ============================================================================
+  # AWS Macie Sensitive Data Discovery Policy
+  # ============================================================================
+  - name: macie-sensitive-data-findings
+    description: |
+      Respond to AWS Macie sensitive data discovery findings in S3 buckets.
+      This policy triggers when Macie detects PII, credentials, or sensitive data.
+    resource: aws.s3
+    mode:
+      type: cloudtrail
+      events:
+        - source: macie2.amazonaws.com
+          event: ClassificationResult
+          ids: "detail.resourcesAffected.s3Bucket.name"
+      role: arn:aws:iam::757541135089:role/cloud-custodian
+      timeout: 300
+      tags:
+        contact: srinivasula.yallala@optum.com
+        repo: aikyam-everything-as-code
+        terraform: "True"
+        oid-owned: "True"
+        aide-id: UHGWM110-019726
+        service-tier: p1
+        application: cloud-custodian
+        managed-by: jenkins
+        environment: engg
+        component: cloud-custodian-policy
+        policy-type: security-findings
+        security-service: macie
+    filters:
+      # Filter based on CloudTrail event details
+      - type: event
+        key: "detail.severity.score"
+        op: gte
+        value: 7
+    actions:
+      # Immediately enable bucket encryption if not already enabled
+      - type: set-bucket-encryption
+        crypto: AES256
+      # Enable versioning for data protection
+      - type: toggle-versioning
+        enabled: true
+      # Block public access
+      - type: set-public-block
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      # Tag the bucket
+      - type: tag
+        key: MacieFinding
+        value: SensitiveDataDetected
+      # Send notification
+      - type: notify
+        template: aws-basic_email
+        priority_header: "1"
+        violation_desc: "Macie Sensitive Data Finding"
+        action_desc: |
+          AWS Macie has detected sensitive data (PII, credentials, financial info) in an S3 bucket.
+          Automatic remediation applied: encryption enabled, versioning enabled, public access blocked.
+        to:
+          - data-security-team@optum.com
+          - compliance-team@optum.com
+        transport:
+          type: sqs
+          queue: https://sqs.us-east-1.amazonaws.com/757541135089/custodian-mailer-queue
+
+  # ============================================================================
+  # AWS IAM Access Analyzer Findings Policy
+  # ============================================================================
+  - name: iam-access-analyzer-external-access
+    description: |
+      Respond to IAM Access Analyzer findings indicating external access to resources.
+      This policy triggers when resources are shared with external principals.
+    resource: aws.access-analyzer-finding
+    mode:
+      type: cloudtrail
+      events:
+        - source: access-analyzer.amazonaws.com
+          event: CreateFinding
+          ids: "detail.id"
+      role: arn:aws:iam::757541135089:role/cloud-custodian
+      timeout: 300
+      tags:
+        contact: srinivasula.yallala@optum.com
+        repo: aikyam-everything-as-code
+        terraform: "True"
+        oid-owned: "True"
+        aide-id: UHGWM110-019726
+        service-tier: p1
+        application: cloud-custodian
+        managed-by: jenkins
+        environment: engg
+        component: cloud-custodian-policy
+        policy-type: security-findings
+        security-service: access-analyzer
+    filters:
+      # Active findings only
+      - type: value
+        key: status
+        value: ACTIVE
+      # Critical resource types
+      - type: value
+        key: resourceType
+        op: in
+        value:
+          - "AWS::S3::Bucket"
+          - "AWS::IAM::Role"
+          - "AWS::KMS::Key"
+          - "AWS::Lambda::Function"
+          - "AWS::SQS::Queue"
+    actions:
+      # Archive non-critical findings after review
+      - type: post-finding
+        compliance_status: WARNING
+        types:
+          - "Software and Configuration Checks/AWS Security Best Practices"
+      # Send notification
+      - type: notify
+        template: aws-iam-user_slack
+        priority_header: "2"
+        slack_template: slack
+        violation_desc: "IAM Access Analyzer External Access Detected"
+        action_desc: |
+          IAM Access Analyzer has detected that a resource is accessible by an external principal.
+          Review the finding to determine if this access is intended.
+        to:
+          - iam-team@optum.com
+          - security-team@optum.com
+          - slack://iam-alerts
+        transport:
+          type: sqs
+          queue: https://sqs.us-east-1.amazonaws.com/757541135089/custodian-mailer-queue
+
+  # ============================================================================
+  # S3 Access Logs Suspicious Activity Policy
+  # ============================================================================
+  - name: s3-access-logs-suspicious-activity
+    description: |
+      Monitor S3 access logs for suspicious activity patterns.
+      This policy analyzes S3 access logs and triggers on anomalous access patterns.
+    resource: aws.s3
+    mode:
+      type: cloudtrail
+      events:
+        - source: s3.amazonaws.com
+          event: GetObject
+          ids: "requestParameters.bucketName"
+        - source: s3.amazonaws.com
+          event: DeleteObject
+          ids: "requestParameters.bucketName"
+        - source: s3.amazonaws.com
+          event: PutBucketPolicy
+          ids: "requestParameters.bucketName"
+      role: arn:aws:iam::757541135089:role/cloud-custodian
+      timeout: 300
+      tags:
+        contact: srinivasula.yallala@optum.com
+        repo: aikyam-everything-as-code
+        terraform: "True"
+        oid-owned: "True"
+        aide-id: UHGWM110-019726
+        service-tier: p1
+        application: cloud-custodian
+        managed-by: jenkins
+        environment: engg
+        component: cloud-custodian-policy
+        policy-type: security-findings
+        security-service: s3-access-logs
+    filters:
+      # Buckets with server access logging enabled
+      - type: bucket-logging
+        op: enabled
+      # Check for suspicious access patterns in CloudTrail
+      - type: event
+        key: "detail.requestParameters.key"
+        op: regex
+        value: ".*(password|secret|credential|key|token|private).*"
+      # Or check for unusual source IPs
+      - or:
+        - type: event
+          key: "detail.sourceIPAddress"
+          op: not-in
+          value_from:
+            url: s3://your-config-bucket/trusted-ips.txt
+    actions:
+      # Tag bucket for review
+      - type: tag
+        key: SuspiciousAccess
+        value: "Detected-{now:%Y-%m-%d}"
+      # Enable versioning if not already enabled
+      - type: toggle-versioning
+        enabled: true
+      # Send alert
+      - type: notify
+        template: aws-basic-resource-names_slack
+        priority_header: "2"
+        slack_template: slack
+        violation_desc: "Suspicious S3 Access Pattern Detected"
+        action_desc: |
+          Suspicious access patterns detected in S3 access logs.
+          This may indicate unauthorized access or data exfiltration attempts.
+        to:
+          - security-operations@optum.com
+          - slack://security-alerts
+        transport:
+          type: sqs
+          queue: https://sqs.us-east-1.amazonaws.com/757541135089/custodian-mailer-queue
+
+  # ============================================================================
+  # AWS CloudTrail Security Monitoring Policy
+  # ============================================================================
+  - name: cloudtrail-security-events
+    description: |
+      Monitor AWS CloudTrail for high-risk security events and configuration changes.
+      This policy triggers on critical API calls that may indicate security issues.
+    resource: aws.account
+    mode:
+      type: cloudtrail
+      events:
+        # IAM security events
+        - source: iam.amazonaws.com
+          event: DeleteUserPolicy
+          ids: "requestParameters.userName"
+        - source: iam.amazonaws.com
+          event: PutUserPolicy
+          ids: "requestParameters.userName"
+        - source: iam.amazonaws.com
+          event: AttachUserPolicy
+          ids: "requestParameters.userName"
+        - source: iam.amazonaws.com
+          event: CreateAccessKey
+          ids: "requestParameters.userName"
+        - source: iam.amazonaws.com
+          event: DeleteAccountPasswordPolicy
+          ids: "userIdentity.accountId"
+        # Security service configuration changes
+        - source: guardduty.amazonaws.com
+          event: DeleteDetector
+          ids: "requestParameters.detectorId"
+        - source: cloudtrail.amazonaws.com
+          event: StopLogging
+          ids: "requestParameters.name"
+        - source: cloudtrail.amazonaws.com
+          event: DeleteTrail
+          ids: "requestParameters.name"
+        - source: config.amazonaws.com
+          event: DeleteConfigRule
+          ids: "requestParameters.configRuleName"
+        - source: config.amazonaws.com
+          event: StopConfigurationRecorder
+          ids: "requestParameters.configurationRecorderName"
+        # Network security changes
+        - source: ec2.amazonaws.com
+          event: AuthorizeSecurityGroupIngress
+          ids: "requestParameters.groupId"
+        - source: ec2.amazonaws.com
+          event: CreateNetworkAclEntry
+          ids: "requestParameters.networkAclId"
+        # Root account usage
+        - source: signin.amazonaws.com
+          event: ConsoleLogin
+          ids: "userIdentity.accountId"
+      role: arn:aws:iam::757541135089:role/cloud-custodian
+      timeout: 300
+      tags:
+        contact: srinivasula.yallala@optum.com
+        repo: aikyam-everything-as-code
+        terraform: "True"
+        oid-owned: "True"
+        aide-id: UHGWM110-019726
+        service-tier: p1
+        application: cloud-custodian
+        managed-by: jenkins
+        environment: engg
+        component: cloud-custodian-policy
+        policy-type: security-findings
+        security-service: cloudtrail
+    filters:
+      # Filter for root account activity
+      - or:
+        - type: event
+          key: "detail.userIdentity.type"
+          value: "Root"
+        # Or failed authentication attempts
+        - type: event
+          key: "detail.responseElements.ConsoleLogin"
+          value: "Failure"
+        # Or actions from unauthorized regions
+        - type: event
+          key: "detail.awsRegion"
+          op: not-in
+          value:
+            - us-east-1
+            - us-east-2
+            - us-west-2
+        # Or console login without MFA
+        - and:
+          - type: event
+            key: "detail.eventName"
+            value: "ConsoleLogin"
+          - type: event
+            key: "detail.additionalEventData.MFAUsed"
+            value: "No"
+    actions:
+      # Send high-priority alert
+      - type: notify
+        template: aws-account-root-user-login-detected_slack
+        priority_header: "1"
+        slack_template: slack
+        violation_desc: "Critical CloudTrail Security Event Detected"
+        action_desc: |
+          A critical security event has been detected in CloudTrail logs.
+          This may indicate:
+          - Root account usage
+          - Failed authentication attempts
+          - Security service configuration changes
+          - Unauthorized region access
+          - Console login without MFA
+          
+          Immediate investigation required.
+        to:
+          - security-operations@optum.com
+          - security-team@optum.com
+          - slack://critical-security-alerts
+        transport:
+          type: sqs
+          queue: https://sqs.us-east-1.amazonaws.com/757541135089/custodian-mailer-queue
+
+  # ============================================================================
+  # EC2 Public Instance Detection with Step Function Remediation
+  # ============================================================================
+  - name: ec2-public-instance-stepfunction-realtime
+    description: |
+      Real-time detection of EC2 instances launched with public IP addresses.
+      Immediately triggers Step Function workflow for automated risk assessment 
+      and remediation based on risk level (HIGH/MEDIUM/LOW).
+    resource: aws.ec2
+    mode:
+      type: cloudtrail
+      events:
+        - source: ec2.amazonaws.com
+          event: RunInstances
+          ids: "responseElements.instancesSet.items[].instanceId"
+        - source: ec2.amazonaws.com
+          event: AssociateAddress
+          ids: "requestParameters.instanceId"
+        - source: ec2.amazonaws.com
+          event: ModifyInstanceAttribute
+          ids: "requestParameters.instanceId"
+      role: arn:aws:iam::757541135089:role/cloud-custodian
+      timeout: 300
+      tags:
+        contact: srinivasula.yallala@optum.com
+        repo: aikyam-everything-as-code
+        terraform: "True"
+        oid-owned: "True"
+        aide-id: UHGWM110-019726
+        service-tier: p1
+        application: cloud-custodian
+        managed-by: jenkins
+        environment: engg
+        component: cloud-custodian-policy
+        policy-type: security-findings
+        security-service: ec2-public-detection
+    filters:
+      # Only running instances
+      - type: value
+        key: State.Name
+        value: running
+      # Has public IP address
+      - or:
+        - type: value
+          key: PublicIpAddress
+          value: not-null
+        - type: value
+          key: NetworkInterfaces[].Association.PublicIp
+          value: not-null
+      # Exclude instances that are intentionally public (tagged)
+      - not:
+        - type: tag-key
+          key: PublicInstanceApproved
+    actions:
+      # Invoke Step Function for automated remediation workflow
+      - type: invoke-sfn
+        state_machine: arn:aws:states:{region}:{account}:stateMachine:EC2PublicInstanceRemediation
+        async: true
+        input:
+          instanceId: "{InstanceId}"
+          publicIpAddress: "{PublicIpAddress}"
+          instanceType: "{InstanceType}"
+          vpcId: "{VpcId}"
+          subnetId: "{SubnetId}"
+          securityGroups: "{SecurityGroups[].GroupId}"
+          launchTime: "{LaunchTime}"
+          imageId: "{ImageId}"
+          keyName: "{KeyName}"
+          iamInstanceProfile: "{IamInstanceProfile.Arn}"
+          tags: "{Tags}"
+          region: "{region}"
+          account: "{account}"
+          detectionTime: "{now}"
+          source: "cloud-custodian-realtime"
+          eventName: "{event.detail.eventName}"
+          sourceIpAddress: "{event.detail.sourceIPAddress}"
+          userAgent: "{event.detail.userAgent}"
+          awsRegion: "{event.detail.awsRegion}"
+      # Tag the instance immediately for tracking
+      - type: tag
+        key: SecurityFinding
+        value: PublicInstanceDetected
+      - type: tag
+        key: DetectionSource
+        value: CloudCustodian-RealTime
+      - type: tag
+        key: DetectionTime
+        value: "{now:%Y-%m-%d %H:%M:%S UTC}"
+      # Send immediate notification
+      - type: notify
+        template: aws-ec2-public-instance_slack
+        priority_header: "1"
+        slack_template: slack
+        violation_desc: "Public EC2 Instance Detected - Step Function Triggered"
+        action_desc: |
+          🚨 SECURITY ALERT: Public EC2 Instance Detected
+          
+          Instance: {InstanceId}
+          Public IP: {PublicIpAddress}
+          Instance Type: {InstanceType}
+          Launch Time: {LaunchTime}
+          VPC: {VpcId}
+          Subnet: {SubnetId}
+          
+          ⚡ Step Function workflow has been automatically triggered for:
+          • Risk assessment and categorization
+          • Automated remediation based on risk level
+          • Security team notification
+          • Compliance tracking
+          
+          🔗 Monitor workflow: https://{region}.console.aws.amazon.com/states/home?region={region}#/executions
+        to:
+          - security-team@optum.com
+          - infrastructure-team@optum.com
+          - slack://security-alerts
+        transport:
+          type: sqs
+          queue: https://sqs.us-east-1.amazonaws.com/757541135089/custodian-mailer-queue
+
+  - name: ec2-public-instance-stepfunction-periodic
+    description: |
+      Periodic scan for existing EC2 instances with public IP addresses.
+      Runs hourly to catch instances that may have been missed by real-time detection
+      or had their networking configuration changed after launch.
+    resource: aws.ec2
+    mode:
+      type: periodic
+      schedule: "rate(1 hour)"
+      role: arn:aws:iam::757541135089:role/cloud-custodian
+      tags:
+        contact: srinivasula.yallala@optum.com
+        repo: aikyam-everything-as-code
+        terraform: "True"
+        oid-owned: "True"
+        aide-id: UHGWM110-019726
+        service-tier: p1
+        application: cloud-custodian
+        managed-by: jenkins
+        environment: engg
+        component: cloud-custodian-policy
+        policy-type: security-findings
+        security-service: ec2-public-detection
+    filters:
+      # Only running instances
+      - type: value
+        key: State.Name
+        value: running
+      # Has public IP address
+      - or:
+        - type: value
+          key: PublicIpAddress
+          value: not-null
+        - type: value
+          key: NetworkInterfaces[].Association.PublicIp
+          value: not-null
+      # Exclude instances that are intentionally public
+      - not:
+        - type: tag-key
+          key: PublicInstanceApproved
+      # Skip instances already processed (tagged) in the last 6 hours
+      - not:
+        - and:
+          - type: tag-key
+            key: SecurityFinding
+          - type: tag-key
+            key: DetectionTime
+          - type: value
+            key: "Tags[?Key=='DetectionTime'].Value | [0]"
+            op: regex
+            value: ".*202[0-9]-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}.*"
+    actions:
+      # Invoke Step Function for automated remediation workflow
+      - type: invoke-sfn
+        state_machine: arn:aws:states:{region}:{account}:stateMachine:EC2PublicInstanceRemediation
+        async: true
+        input:
+          instanceId: "{InstanceId}"
+          publicIpAddress: "{PublicIpAddress}"
+          instanceType: "{InstanceType}"
+          vpcId: "{VpcId}"
+          subnetId: "{SubnetId}"
+          securityGroups: "{SecurityGroups[].GroupId}"
+          launchTime: "{LaunchTime}"
+          imageId: "{ImageId}"
+          keyName: "{KeyName}"
+          iamInstanceProfile: "{IamInstanceProfile.Arn}"
+          tags: "{Tags}"
+          region: "{region}"
+          account: "{account}"
+          detectionTime: "{now}"
+          source: "cloud-custodian-periodic"
+          scanType: "periodic-hourly"
+      # Tag the instance for tracking
+      - type: tag
+        key: SecurityFinding
+        value: PublicInstanceDetected
+      - type: tag
+        key: DetectionSource
+        value: CloudCustodian-Periodic
+      - type: tag
+        key: DetectionTime
+        value: "{now:%Y-%m-%d %H:%M:%S UTC}"
+
+  # ============================================================================
+  # Periodic Security Findings Summary Policy
+  # ============================================================================
+  - name: security-findings-daily-summary
+    description: |
+      Daily summary of all security findings from various AWS security services.
+      This provides a consolidated view of the security posture.
+    resource: aws.account
+    mode:
+      type: periodic
+      schedule: "cron(0 23 ? * SUN *)"  # 9 AM UTC daily
+      role: arn:aws:iam::757541135089:role/cloud-custodian
+      tags:
+        contact: srinivasula.yallala@optum.com
+        repo: aikyam-everything-as-code
+        terraform: "True"
+        oid-owned: "True"
+        aide-id: UHGWM110-019726
+        service-tier: p1
+        application: cloud-custodian
+        managed-by: jenkins
+        environment: engg
+        component: cloud-custodian-policy
+        policy-type: security-findings
+        security-service: summary
+    actions:
+      # Generate and send daily summary
+      - type: invoke-lambda
+        function: custodian-security-findings-aggregator
+        async: false
+      - type: notify
+        template: aws-basic_email
+        priority_header: "3"
+        subject: "Daily Security Findings Summary - {account}"
+        violation_desc: "Daily Security Findings Report"
+        action_desc: |
+          This is your daily summary of security findings from:
+          - AWS GuardDuty
+          - AWS Config Rules
+          - AWS Security Hub
+          - AWS Macie
+          - IAM Access Analyzer
+          - S3 Access Logs Analysis
+          - CloudTrail Security Events
+          - EC2 Public Instance Detection
+          
+          Review the findings and take appropriate action.
+        to:
+          - security-team@optum.com
+          - compliance-team@optum.com
+        transport:
+          type: sqs
+          queue: https://sqs.us-east-1.amazonaws.com/757541135089/custodian-mailer-queue

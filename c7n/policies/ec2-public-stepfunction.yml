@@ -1,0 +1,102 @@
+policies:
+  - name: ec2-public-instances-stepfunction-remediation
+    description: |
+      Detect public EC2 instances and invoke Step Function for automated remediation workflow.
+      This policy triggers a Step Function that handles notification, tagging, and remediation
+      of publicly accessible EC2 instances.
+    resource: aws.ec2
+    mode:
+      type: cloudtrail
+      events:
+        - RunInstances
+        - ModifyInstanceAttribute
+        - AuthorizeSecurityGroupIngress
+        - AuthorizeSecurityGroupEgress
+      role: arn:aws:iam::{account_id}:role/cloud-custodian-stepfunction-role
+    filters:
+      - type: instance-attribute
+        attribute: state-name
+        value: running
+      - or:
+          # Check for instances with public IP addresses
+          - type: instance-attribute
+            attribute: public-ip-address
+            value: present
+          # Check for instances in security groups allowing public access
+          - type: security-group
+            key: "GroupName"
+            value: default
+            match-resource: true
+            operator: contains
+          - type: security-group
+            key: "IpPermissions[].IpRanges[].CidrIp"
+            value: "0.0.0.0/0"
+            match-resource: true
+            operator: contains
+    actions:
+      - type: invoke-sfn
+        state-machine: arn:aws:states:{region}:{account_id}:stateMachine:EC2PublicInstanceRemediation
+        region: "{region}"
+        async: true
+        input:
+          instanceId: "{InstanceId}"
+          accountId: "{account_id}"
+          region: "{region}"
+          publicIp: "{PublicIpAddress}"
+          securityGroups: "{SecurityGroups[].GroupId}"
+          subnetId: "{SubnetId}"
+          vpcId: "{VpcId}"
+          instanceType: "{InstanceType}"
+          launchTime: "{LaunchTime}"
+          tags: "{Tags}"
+          platform: "{Platform}"
+          discoveredBy: "cloud-custodian"
+          discoveredAt: "{now}"
+          policyName: "ec2-public-instances-stepfunction-remediation"
+
+  - name: ec2-public-instances-periodic-check
+    description: |
+      Periodic check for public EC2 instances using Step Function remediation.
+      Runs every 6 hours to catch instances that may have been missed by real-time monitoring.
+    resource: aws.ec2
+    mode:
+      type: periodic
+      schedule: "rate(6 hours)"
+      role: arn:aws:iam::{account_id}:role/cloud-custodian-stepfunction-role
+    filters:
+      - type: instance-attribute
+        attribute: state-name
+        value: running
+      - or:
+          - type: instance-attribute
+            attribute: public-ip-address
+            value: present
+          - type: security-group
+            key: "IpPermissions[].IpRanges[].CidrIp"
+            value: "0.0.0.0/0"
+            match-resource: true
+            operator: contains
+      # Only process instances that haven't been processed recently
+      - not:
+          - type: tag-key
+            key: "custodian:stepfunction-processed"
+    actions:
+      - type: invoke-sfn
+        state-machine: arn:aws:states:{region}:{account_id}:stateMachine:EC2PublicInstanceRemediation
+        region: "{region}"
+        async: true
+        input:
+          instanceId: "{InstanceId}"
+          accountId: "{account_id}"
+          region: "{region}"
+          publicIp: "{PublicIpAddress}"
+          securityGroups: "{SecurityGroups[].GroupId}"
+          subnetId: "{SubnetId}"
+          vpcId: "{VpcId}"
+          instanceType: "{InstanceType}"
+          launchTime: "{LaunchTime}"
+          tags: "{Tags}"
+          platform: "{Platform}"
+          discoveredBy: "cloud-custodian-periodic"
+          discoveredAt: "{now}"
+          policyName: "ec2-public-instances-periodic-check"

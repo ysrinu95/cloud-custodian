@@ -1,0 +1,314 @@
+{
+  "Comment": "EC2 Public Instance Remediation Workflow",
+  "StartAt": "NotifySecurityTeam",
+  "States": {
+    "NotifySecurityTeam": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:{region}:{account_id}:function:EC2-PublicInstance-Notifier",
+      "Comment": "Send notification about public EC2 instance discovery",
+      "InputPath": "$",
+      "ResultPath": "$.notificationResult",
+      "Next": "TagInstance",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.TaskFailed", "Lambda.ServiceException"],
+          "IntervalSeconds": 5,
+          "MaxAttempts": 3,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "NotificationFailed",
+          "ResultPath": "$.error"
+        }
+      ]
+    },
+    "TagInstance": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:{region}:{account_id}:function:EC2-PublicInstance-Tagger",
+      "Comment": "Tag the public EC2 instance with compliance and tracking information",
+      "InputPath": "$",
+      "ResultPath": "$.taggingResult",
+      "Next": "EvaluateRisk",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.TaskFailed", "Lambda.ServiceException"],
+          "IntervalSeconds": 3,
+          "MaxAttempts": 2,
+          "BackoffRate": 1.5
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "TaggingFailed",
+          "ResultPath": "$.error"
+        }
+      ]
+    },
+    "EvaluateRisk": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:{region}:{account_id}:function:EC2-PublicInstance-RiskEvaluator",
+      "Comment": "Evaluate the security risk level of the public instance",
+      "InputPath": "$",
+      "ResultPath": "$.riskEvaluation",
+      "Next": "RiskBasedDecision",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.TaskFailed", "Lambda.ServiceException"],
+          "IntervalSeconds": 3,
+          "MaxAttempts": 2,
+          "BackoffRate": 1.5
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "RiskEvaluationFailed",
+          "ResultPath": "$.error"
+        }
+      ]
+    },
+    "RiskBasedDecision": {
+      "Type": "Choice",
+      "Comment": "Decide on remediation action based on risk level",
+      "Choices": [
+        {
+          "Variable": "$.riskEvaluation.riskLevel",
+          "StringEquals": "HIGH",
+          "Next": "StopInstanceImmediate"
+        },
+        {
+          "Variable": "$.riskEvaluation.riskLevel",
+          "StringEquals": "MEDIUM",
+          "Next": "WaitForManualReview"
+        },
+        {
+          "Variable": "$.riskEvaluation.riskLevel",
+          "StringEquals": "LOW",
+          "Next": "LogAndMonitor"
+        }
+      ],
+      "Default": "StopInstanceImmediate"
+    },
+    "StopInstanceImmediate": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:{region}:{account_id}:function:EC2-PublicInstance-Stopper",
+      "Comment": "Immediately stop high-risk public EC2 instance",
+      "InputPath": "$",
+      "ResultPath": "$.stopResult",
+      "Next": "PostStopVerification",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.TaskFailed", "Lambda.ServiceException"],
+          "IntervalSeconds": 5,
+          "MaxAttempts": 3,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "StopFailed",
+          "ResultPath": "$.error"
+        }
+      ]
+    },
+    "WaitForManualReview": {
+      "Type": "Wait",
+      "Comment": "Wait 30 minutes for manual review of medium-risk instance",
+      "Seconds": 1800,
+      "Next": "CheckManualReviewDecision"
+    },
+    "CheckManualReviewDecision": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:{region}:{account_id}:function:EC2-PublicInstance-ReviewChecker",
+      "Comment": "Check if manual review decision was made",
+      "InputPath": "$",
+      "ResultPath": "$.reviewDecision",
+      "Next": "ManualReviewDecision",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.TaskFailed", "Lambda.ServiceException"],
+          "IntervalSeconds": 3,
+          "MaxAttempts": 2,
+          "BackoffRate": 1.5
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "ReviewCheckFailed",
+          "ResultPath": "$.error"
+        }
+      ]
+    },
+    "ManualReviewDecision": {
+      "Type": "Choice",
+      "Comment": "Act based on manual review decision",
+      "Choices": [
+        {
+          "Variable": "$.reviewDecision.action",
+          "StringEquals": "STOP",
+          "Next": "StopInstanceImmediate"
+        },
+        {
+          "Variable": "$.reviewDecision.action",
+          "StringEquals": "MONITOR",
+          "Next": "LogAndMonitor"
+        },
+        {
+          "Variable": "$.reviewDecision.action",
+          "StringEquals": "APPROVE",
+          "Next": "ApproveAndDocument"
+        }
+      ],
+      "Default": "StopInstanceImmediate"
+    },
+    "LogAndMonitor": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:{region}:{account_id}:function:EC2-PublicInstance-Monitor",
+      "Comment": "Log the instance and set up enhanced monitoring",
+      "InputPath": "$",
+      "ResultPath": "$.monitoringResult",
+      "Next": "WorkflowComplete",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.TaskFailed", "Lambda.ServiceException"],
+          "IntervalSeconds": 3,
+          "MaxAttempts": 2,
+          "BackoffRate": 1.5
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "MonitoringFailed",
+          "ResultPath": "$.error"
+        }
+      ]
+    },
+    "ApproveAndDocument": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:{region}:{account_id}:function:EC2-PublicInstance-Approver",
+      "Comment": "Document the approval and update instance tags",
+      "InputPath": "$",
+      "ResultPath": "$.approvalResult",
+      "Next": "WorkflowComplete",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.TaskFailed", "Lambda.ServiceException"],
+          "IntervalSeconds": 3,
+          "MaxAttempts": 2,
+          "BackoffRate": 1.5
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "ApprovalFailed",
+          "ResultPath": "$.error"
+        }
+      ]
+    },
+    "PostStopVerification": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:{region}:{account_id}:function:EC2-PublicInstance-Verifier",
+      "Comment": "Verify that the instance was stopped successfully",
+      "InputPath": "$",
+      "ResultPath": "$.verificationResult",
+      "Next": "StopSuccessNotification",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.TaskFailed", "Lambda.ServiceException"],
+          "IntervalSeconds": 5,
+          "MaxAttempts": 3,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "VerificationFailed",
+          "ResultPath": "$.error"
+        }
+      ]
+    },
+    "StopSuccessNotification": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:{region}:{account_id}:function:EC2-PublicInstance-Notifier",
+      "Comment": "Send success notification about instance stop",
+      "InputPath": "$",
+      "ResultPath": "$.finalNotificationResult",
+      "Next": "WorkflowComplete",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.TaskFailed", "Lambda.ServiceException"],
+          "IntervalSeconds": 3,
+          "MaxAttempts": 2,
+          "BackoffRate": 1.5
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "FinalNotificationFailed",
+          "ResultPath": "$.error"
+        }
+      ]
+    },
+    "WorkflowComplete": {
+      "Type": "Pass",
+      "Comment": "Workflow completed successfully",
+      "Result": "EC2 Public Instance Remediation Workflow Completed",
+      "End": true
+    },
+    "NotificationFailed": {
+      "Type": "Fail",
+      "Comment": "Failed to send initial notification",
+      "Cause": "Notification service unavailable"
+    },
+    "TaggingFailed": {
+      "Type": "Fail",
+      "Comment": "Failed to tag the EC2 instance",
+      "Cause": "Insufficient permissions or instance not found"
+    },
+    "RiskEvaluationFailed": {
+      "Type": "Fail",
+      "Comment": "Failed to evaluate security risk",
+      "Cause": "Risk evaluation service error"
+    },
+    "StopFailed": {
+      "Type": "Fail",
+      "Comment": "Failed to stop the EC2 instance",
+      "Cause": "Insufficient permissions or instance protection enabled"
+    },
+    "ReviewCheckFailed": {
+      "Type": "Fail",
+      "Comment": "Failed to check manual review decision",
+      "Cause": "Review system unavailable"
+    },
+    "MonitoringFailed": {
+      "Type": "Fail",
+      "Comment": "Failed to set up monitoring",
+      "Cause": "Monitoring service error"
+    },
+    "ApprovalFailed": {
+      "Type": "Fail",
+      "Comment": "Failed to process approval",
+      "Cause": "Approval system error"
+    },
+    "VerificationFailed": {
+      "Type": "Fail",
+      "Comment": "Failed to verify instance stop",
+      "Cause": "Verification service error"
+    },
+    "FinalNotificationFailed": {
+      "Type": "Fail",
+      "Comment": "Failed to send final notification",
+      "Cause": "Notification service error"
+    }
+  }
+}
