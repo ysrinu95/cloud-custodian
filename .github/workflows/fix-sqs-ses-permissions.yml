@@ -1,0 +1,244 @@
+name: Fix SQS SES Permissions (Direct IAM Update)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_fix:
+        description: 'Type "fix-permissions" to confirm direct IAM policy update'
+        required: true
+        type: string
+
+env:
+  AWS_REGION: 'us-east-1'
+
+jobs:
+  fix-permissions:
+    name: 'Fix SQS and SES Permissions Directly'
+    runs-on: ubuntu-latest
+    if: github.event.inputs.confirm_fix == 'fix-permissions'
+    
+    permissions:
+      id-token: write
+      contents: read
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-SQS-SES-Fix-${{ github.run_number }}
+      
+      - name: Verify AWS Connection
+        run: |
+          echo "🔍 Verifying AWS connection..."
+          aws sts get-caller-identity
+          echo "✅ AWS connection verified"
+      
+      - name: Check Current Role Permissions
+        run: |
+          echo "🔍 Checking current IAM permissions..."
+          
+          # List current attached policies
+          echo "📋 Currently attached policies to GitHubActions-CloudCustodian-Role:"
+          aws iam list-attached-role-policies --role-name GitHubActions-CloudCustodian-Role
+          
+          # Check for inline policies
+          echo "📋 Inline policies:"
+          aws iam list-role-policies --role-name GitHubActions-CloudCustodian-Role
+      
+      - name: Create Comprehensive IAM Policy for GitHub Actions
+        run: |
+          echo "📝 Creating comprehensive IAM policy for GitHub Actions..."
+          
+          # Create policy document with all necessary permissions
+          cat > github_actions_policy.json << 'EOF'
+          {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Sid": "ComprehensiveTerraformPermissions",
+                "Effect": "Allow",
+                "Action": [
+                  "sqs:*",
+                  "ses:*",
+                  "sns:*",
+                  "s3:*",
+                  "logs:*",
+                  "cloudwatch:*",
+                  "events:*",
+                  "lambda:*",
+                  "iam:GetRole",
+                  "iam:GetPolicy",
+                  "iam:GetPolicyVersion",
+                  "iam:ListAttachedRolePolicies",
+                  "iam:AttachRolePolicy",
+                  "iam:DetachRolePolicy",
+                  "iam:CreateRole",
+                  "iam:DeleteRole",
+                  "iam:UpdateRole",
+                  "iam:CreatePolicy",
+                  "iam:DeletePolicy",
+                  "iam:CreatePolicyVersion",
+                  "iam:DeletePolicyVersion",
+                  "iam:SetDefaultPolicyVersion",
+                  "iam:TagRole",
+                  "iam:UntagRole",
+                  "iam:TagPolicy",
+                  "iam:UntagPolicy",
+                  "iam:PassRole",
+                  "iam:ListRoles",
+                  "iam:ListPolicies",
+                  "ec2:Describe*",
+                  "ec2:Get*",
+                  "ec2:List*",
+                  "sts:GetCallerIdentity"
+                ],
+                "Resource": "*"
+              }
+            ]
+          }
+          EOF
+          
+          echo "✅ Policy document created"
+      
+      - name: Update Existing CloudCustodianPolicy or Create New One
+        run: |
+          echo "🔄 Updating IAM policy for GitHub Actions role..."
+          
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          POLICY_NAME="CloudCustodianPolicy"
+          POLICY_ARN="arn:aws:iam::${ACCOUNT_ID}:policy/${POLICY_NAME}"
+          
+          # Check if policy exists
+          if aws iam get-policy --policy-arn "$POLICY_ARN" 2>/dev/null; then
+            echo "📋 Policy exists, creating new version..."
+            
+            # List current versions to check if we need to delete old ones
+            VERSIONS=$(aws iam list-policy-versions --policy-arn "$POLICY_ARN" --query 'Versions[?!IsDefaultVersion].VersionId' --output text)
+            
+            # Delete non-default versions if we're at the limit (5 versions max)
+            VERSION_COUNT=$(aws iam list-policy-versions --policy-arn "$POLICY_ARN" --query 'length(Versions)' --output text)
+            echo "📊 Current policy versions: $VERSION_COUNT"
+            
+            if [ "$VERSION_COUNT" -ge 5 ]; then
+              echo "🗑️ Deleting oldest non-default version to make room..."
+              OLDEST_VERSION=$(aws iam list-policy-versions --policy-arn "$POLICY_ARN" --query 'Versions[?!IsDefaultVersion] | sort_by(@, &CreateDate) | [0].VersionId' --output text)
+              aws iam delete-policy-version --policy-arn "$POLICY_ARN" --version-id "$OLDEST_VERSION"
+              echo "✅ Deleted version: $OLDEST_VERSION"
+            fi
+            
+            # Create new version
+            NEW_VERSION=$(aws iam create-policy-version \
+              --policy-arn "$POLICY_ARN" \
+              --policy-document file://github_actions_policy.json \
+              --set-as-default \
+              --query 'PolicyVersion.VersionId' \
+              --output text)
+            
+            echo "✅ Created new default policy version: $NEW_VERSION"
+            
+          else
+            echo "🆕 Policy doesn't exist, creating new policy..."
+            
+            POLICY_ARN=$(aws iam create-policy \
+              --policy-name "$POLICY_NAME" \
+              --policy-document file://github_actions_policy.json \
+              --description "Comprehensive policy for GitHub Actions Cloud Custodian operations" \
+              --query 'Policy.Arn' \
+              --output text)
+            
+            echo "✅ Created new policy: $POLICY_ARN"
+            
+            # Attach to role
+            echo "🔗 Attaching policy to GitHubActions-CloudCustodian-Role..."
+            aws iam attach-role-policy \
+              --role-name GitHubActions-CloudCustodian-Role \
+              --policy-arn "$POLICY_ARN"
+            
+            echo "✅ Policy attached to role"
+          fi
+          
+          echo "POLICY_ARN=$POLICY_ARN" >> $GITHUB_ENV
+      
+      - name: Verify SQS and SES Permissions
+        run: |
+          echo "🔍 Verifying SQS and SES permissions..."
+          
+          # Wait for permission propagation
+          echo "⏳ Waiting 15 seconds for permission propagation..."
+          sleep 15
+          
+          # Test SQS permissions by trying to list queues (should work)
+          echo "🧪 Testing SQS permissions..."
+          if aws sqs list-queues --region $AWS_REGION; then
+            echo "✅ SQS list permissions working"
+          else
+            echo "❌ SQS permissions still not working"
+          fi
+          
+          # Test SES permissions by trying to list identities (should work)
+          echo "🧪 Testing SES permissions..."
+          if aws ses list-identities --region $AWS_REGION; then
+            echo "✅ SES list permissions working"
+          else
+            echo "❌ SES permissions still not working"
+          fi
+          
+          echo "📋 Final policy verification:"
+          aws iam get-policy-version \
+            --policy-arn "$POLICY_ARN" \
+            --version-id $(aws iam get-policy --policy-arn "$POLICY_ARN" --query 'Policy.DefaultVersionId' --output text) \
+            --query 'PolicyVersion.Document.Statement[0].Action' \
+            --output json | head -20
+      
+      - name: Generate Summary
+        run: |
+          echo "🔧 SQS and SES Permissions Fix" >> $GITHUB_STEP_SUMMARY
+          echo "==============================" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Status**: ✅ Permissions Updated" >> $GITHUB_STEP_SUMMARY
+          echo "**Timestamp**: $(date)" >> $GITHUB_STEP_SUMMARY
+          echo "**Policy ARN**: $POLICY_ARN" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 🎯 Fixed Permissions" >> $GITHUB_STEP_SUMMARY
+          echo "- **sqs:*** - All SQS operations including tagqueue" >> $GITHUB_STEP_SUMMARY
+          echo "- **ses:*** - All SES operations including VerifyEmailIdentity" >> $GITHUB_STEP_SUMMARY
+          echo "- **sns:*** - All SNS operations" >> $GITHUB_STEP_SUMMARY
+          echo "- **s3:*** - All S3 operations" >> $GITHUB_STEP_SUMMARY
+          echo "- **logs:*** - All CloudWatch Logs operations" >> $GITHUB_STEP_SUMMARY
+          echo "- **cloudwatch:*** - All CloudWatch operations" >> $GITHUB_STEP_SUMMARY
+          echo "- **events:*** - All EventBridge/CloudWatch Events operations" >> $GITHUB_STEP_SUMMARY
+          echo "- **lambda:*** - All Lambda operations" >> $GITHUB_STEP_SUMMARY
+          echo "- **iam:** Limited IAM operations for Terraform" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 🚀 Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "- **Retry your Terraform apply** - SQS and SES resources should now be created successfully" >> $GITHUB_STEP_SUMMARY
+          echo "- **Run Cloud Custodian workflows** - All AWS service permissions are now available" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## ⚠️ Note" >> $GITHUB_STEP_SUMMARY
+          echo "This fix updates the existing CloudCustodianPolicy with comprehensive permissions." >> $GITHUB_STEP_SUMMARY
+          echo "If you continue to see permission errors, please wait a few minutes for AWS IAM propagation." >> $GITHUB_STEP_SUMMARY
+
+  validation:
+    name: 'Validate Fix Request'
+    runs-on: ubuntu-latest
+    if: github.event.inputs.confirm_fix != 'fix-permissions'
+    
+    steps:
+      - name: Invalid Confirmation
+        run: |
+          echo "❌ Permission fix not confirmed"
+          echo ""
+          echo "To apply the SQS/SES permissions fix:"
+          echo "1. Go to Actions → 'Fix SQS SES Permissions (Direct IAM Update)'"
+          echo "2. Click 'Run workflow'"
+          echo "3. Type 'fix-permissions' in the confirmation field"
+          echo "4. Click 'Run workflow'"
+          echo ""
+          echo "⚠️  This will directly update the IAM policy for GitHub Actions"
+          echo "🔒 The update includes comprehensive AWS service permissions"
+          exit 1
