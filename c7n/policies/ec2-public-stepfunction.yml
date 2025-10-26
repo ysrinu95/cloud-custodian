@@ -9,50 +9,18 @@ policies:
       type: cloudtrail
       events:
         - RunInstances
-        - ModifyInstanceAttribute
-        - AuthorizeSecurityGroupIngress
-        - AuthorizeSecurityGroupEgress
       role: arn:aws:iam::{account_id}:role/cloud-custodian-stepfunction-role
     filters:
       - type: value
         key: State.Name
         value: running
-      - or:
-          # Check for instances with public IP addresses
-          - type: value
-            key: PublicIpAddress
-            value: not-null
-          # Check for instances in security groups allowing public access
-          - type: security-group
-            key: "GroupName"
-            value: default
-            match-resource: true
-            operator: contains
-          - type: security-group
-            key: "IpPermissions[].IpRanges[].CidrIp"
-            value: "0.0.0.0/0"
-            match-resource: true
-            operator: contains
+      # Check for instances with public IP addresses
+      - type: value
+        key: PublicIpAddress
+        value: not-null
     actions:
       - type: invoke-sfn
-        state_machine: arn:aws:states:{region}:{account_id}:stateMachine:EC2PublicInstanceRemediation
-        region: "{region}"
-        async: true
-        input:
-          instanceId: "{InstanceId}"
-          accountId: "{account_id}"
-          region: "{region}"
-          publicIp: "{PublicIpAddress}"
-          securityGroups: "{SecurityGroups[].GroupId}"
-          subnetId: "{SubnetId}"
-          vpcId: "{VpcId}"
-          instanceType: "{InstanceType}"
-          launchTime: "{LaunchTime}"
-          tags: "{Tags}"
-          platform: "{Platform}"
-          discoveredBy: "cloud-custodian"
-          discoveredAt: "{now}"
-          policyName: "ec2-public-instances-stepfunction-remediation"
+        state-machine: arn:aws:states:{region}:{account_id}:stateMachine:EC2PublicInstanceRemediation
 
   - name: ec2-public-instances-periodic-check
     description: |
@@ -67,38 +35,14 @@ policies:
       - type: value
         key: State.Name
         value: running
-      - or:
-          - type: value
-            key: PublicIpAddress
-            value: not-null
-          - type: security-group
-            key: "IpPermissions[].IpRanges[].CidrIp"
-            value: "0.0.0.0/0"
-            match-resource: true
-            operator: contains
+      # Check for instances with public IP addresses
+      - type: value
+        key: PublicIpAddress
+        value: not-null
       # Only process instances that haven't been processed recently
-      - not:
-          - type: tag-key
-            key: "custodian:stepfunction-processed"
-          - type: tag-key
-            key: "custodian:stepfunction-processed"
+      - type: value
+        key: "Tags[?Key == 'custodian:stepfunction-processed'] | length(@)"
+        value: 0
     actions:
       - type: invoke-sfn
-        state_machine: arn:aws:states:{region}:{account_id}:stateMachine:EC2PublicInstanceRemediation
-        region: "{region}"
-        async: true
-        input:
-          instanceId: "{InstanceId}"
-          accountId: "{account_id}"
-          region: "{region}"
-          publicIp: "{PublicIpAddress}"
-          securityGroups: "{SecurityGroups[].GroupId}"
-          subnetId: "{SubnetId}"
-          vpcId: "{VpcId}"
-          instanceType: "{InstanceType}"
-          launchTime: "{LaunchTime}"
-          tags: "{Tags}"
-          platform: "{Platform}"
-          discoveredBy: "cloud-custodian-periodic"
-          discoveredAt: "{now}"
-          policyName: "ec2-public-instances-periodic-check"
+        state-machine: arn:aws:states:{region}:{account_id}:stateMachine:EC2PublicInstanceRemediation

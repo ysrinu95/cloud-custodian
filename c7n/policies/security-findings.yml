@@ -589,35 +589,13 @@ policies:
           key: NetworkInterfaces[].Association.PublicIp
           value: not-null
       # Exclude instances that are intentionally public (tagged)
-      - type: not
-        filters:
-          - type: tag-key
-            key: PublicInstanceApproved
+      - type: value
+        key: "Tags[?Key == 'PublicInstanceApproved'] | length(@)"
+        value: 0
     actions:
       # Invoke Step Function for automated remediation workflow
       - type: invoke-sfn
-        state_machine: arn:aws:states:{region}:{account}:stateMachine:EC2PublicInstanceRemediation
-        async: true
-        input:
-          instanceId: "{InstanceId}"
-          publicIpAddress: "{PublicIpAddress}"
-          instanceType: "{InstanceType}"
-          vpcId: "{VpcId}"
-          subnetId: "{SubnetId}"
-          securityGroups: "{SecurityGroups[].GroupId}"
-          launchTime: "{LaunchTime}"
-          imageId: "{ImageId}"
-          keyName: "{KeyName}"
-          iamInstanceProfile: "{IamInstanceProfile.Arn}"
-          tags: "{Tags}"
-          region: "{region}"
-          account: "{account}"
-          detectionTime: "{now}"
-          source: "cloud-custodian-realtime"
-          eventName: "{event.detail.eventName}"
-          sourceIpAddress: "{event.detail.sourceIPAddress}"
-          userAgent: "{event.detail.userAgent}"
-          awsRegion: "{event.detail.awsRegion}"
+        state-machine: arn:aws:states:{region}:{account}:stateMachine:EC2PublicInstanceRemediation
       # Tag the instance immediately for tracking
       - type: tag
         key: SecurityFinding
@@ -696,45 +674,17 @@ policies:
           key: NetworkInterfaces[].Association.PublicIp
           value: not-null
       # Exclude instances that are intentionally public
-      - type: not
-        filters:
-          - type: tag-key
-            key: PublicInstanceApproved
+      - type: value
+        key: "Tags[?Key == 'PublicInstanceApproved'] | length(@)"
+        value: 0
       # Skip instances already processed (tagged) in the last 6 hours
-      - type: not
-        filters:
-          - type: and
-            filters:
-              - type: tag-key
-                key: SecurityFinding
-              - type: tag-key
-                key: DetectionTime
-              - type: value
-                key: "Tags[?Key=='DetectionTime'].Value | [0]"
-                op: regex
-                value: ".*202[0-9]-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}.*"
+      - type: value
+        key: "Tags[?Key == 'SecurityFinding'] | length(@)"
+        value: 0
     actions:
       # Invoke Step Function for automated remediation workflow
       - type: invoke-sfn
-        state_machine: arn:aws:states:{region}:{account}:stateMachine:EC2PublicInstanceRemediation
-        async: true
-        input:
-          instanceId: "{InstanceId}"
-          publicIpAddress: "{PublicIpAddress}"
-          instanceType: "{InstanceType}"
-          vpcId: "{VpcId}"
-          subnetId: "{SubnetId}"
-          securityGroups: "{SecurityGroups[].GroupId}"
-          launchTime: "{LaunchTime}"
-          imageId: "{ImageId}"
-          keyName: "{KeyName}"
-          iamInstanceProfile: "{IamInstanceProfile.Arn}"
-          tags: "{Tags}"
-          region: "{region}"
-          account: "{account}"
-          detectionTime: "{now}"
-          source: "cloud-custodian-periodic"
-          scanType: "periodic-hourly"
+        state-machine: arn:aws:states:{region}:{account}:stateMachine:EC2PublicInstanceRemediation
       # Tag the instance for tracking
       - type: tag
         key: SecurityFinding
