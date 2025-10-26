@@ -35,8 +35,7 @@ policies:
       Notifies of Lambda functions using deprecated runtimes
     mode:
       type: periodic
-      schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
-      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
+      schedule: cron($1) $2
       tags: *tags
     filters:
       - type: value
@@ -66,8 +65,7 @@ policies:
       Notifies of Lambda functions using oudated runtimes that will be deprecated soon
     mode:
       type: periodic
-      schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
-      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
+      schedule: cron($1) $2
       tags: *tags
     filters:
       - type: value
@@ -97,7 +95,7 @@ policies:
       Notify when a Lambda function is created with an outdated runtime.
     mode:
       type: cloudtrail
-      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
+
       events:
         - CreateFunction
     filters:
@@ -121,8 +119,7 @@ policies:
       Notifies of Lambda functions appear to be unused.
     mode:
       type: periodic
-      schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
-      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
+      schedule: cron($1) $2
       tags: *tags
     filters:
       # not invoked in last year

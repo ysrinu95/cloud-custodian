@@ -29,8 +29,7 @@ policies:
       Notifies of instances found with a public IP address
     mode:
       type: periodic
-      schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
-      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
+      schedule: cron($1) $2
       tags: *tags
     filters:
       - type: value
@@ -52,7 +51,7 @@ policies:
       type: cloudtrail
       events:
         - RunInstances
-      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
+
       tags: *tags
     filters:
       - type: event
@@ -79,7 +78,7 @@ policies:
   #   mode:
   #     type: periodic
   #     schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
-  #     role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
+
   #     tags: *tags
   #   filters:
   #     - unused
@@ -110,7 +109,7 @@ policies:
         - source: ec2.amazonaws.com
           event: RevokeSecurityGroupIngress
           ids: requestParameters.groupId
-      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
+
       tags: *tags
     filters:
       - or:

@@ -13,7 +13,7 @@ policies:
         - source: aws.guardduty
           event: CreateFinding
           ids: "detail.id"
-      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
+
       timeout: 300
       tags:
         contact: srinivasula.yallala@optum.com
@@ -83,7 +83,7 @@ policies:
         - source: aws.config
           event: PutEvaluations
           ids: "requestParameters.evaluations[].complianceResourceId"
-      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
+
       timeout: 300
       tags:
         contact: srinivasula.yallala@optum.com
@@ -148,7 +148,7 @@ policies:
         - source: aws.securityhub
           event: BatchImportFindings
           ids: "detail.findings[].Id"
-      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
+
       timeout: 300
       tags:
         contact: srinivasula.yallala@optum.com
@@ -224,7 +224,7 @@ policies:
         - source: macie2.amazonaws.com
           event: ClassificationResult
           ids: "detail.resourcesAffected.s3Bucket.name"
-      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
+
       timeout: 300
       tags:
         contact: srinivasula.yallala@optum.com
@@ -291,7 +291,7 @@ policies:
         - source: access-analyzer.amazonaws.com
           event: CreateFinding
           ids: "detail.id"
-      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
+
       timeout: 300
       tags:
         contact: srinivasula.yallala@optum.com
@@ -364,7 +364,7 @@ policies:
         - source: s3.amazonaws.com
           event: PutBucketPolicy
           ids: "requestParameters.bucketName"
-      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
+
       timeout: 300
       tags:
         contact: srinivasula.yallala@optum.com
@@ -473,7 +473,7 @@ policies:
         - source: signin.amazonaws.com
           event: ConsoleLogin
           ids: "userIdentity.accountId"
-      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
+
       timeout: 300
       tags:
         contact: srinivasula.yallala@optum.com
@@ -560,7 +560,7 @@ policies:
         - source: ec2.amazonaws.com
           event: ModifyInstanceAttribute
           ids: "requestParameters.instanceId"
-      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
+
       timeout: 300
       tags:
         contact: srinivasula.yallala@optum.com
@@ -646,7 +646,7 @@ policies:
     mode:
       type: periodic
       schedule: "rate(1 hour)"
-      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
+
       tags:
         contact: srinivasula.yallala@optum.com
         repo: aikyam-everything-as-code
@@ -707,7 +707,7 @@ policies:
     mode:
       type: periodic
       schedule: "cron(0 23 ? * SUN *)"  # 9 AM UTC daily
-      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
+
       tags:
         contact: srinivasula.yallala@optum.com
         repo: aikyam-everything-as-code

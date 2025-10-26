@@ -20,8 +20,7 @@ policies:
       Notifies of CloudWatch log groups found to be unused
     mode:
       type: periodic
-      schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
-      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
+      schedule: cron($1) $2
       tags: *tags
     filters:
       # not written to in last year
@@ -50,8 +49,7 @@ policies:
       Notifies and sets the log group retention for c7n log groups
     mode:
       type: periodic
-      schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
-      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
+      schedule: cron($1) $2
       tags: *tags
     filters:
      - type: value
@@ -75,8 +73,7 @@ policies:
       Notifies and sets the retention for log groups set to never expire
     mode:
       type: periodic
-      schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
-      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
+      schedule: cron($1) $2
       tags: *tags
     filters:
       - retentionInDays: absent

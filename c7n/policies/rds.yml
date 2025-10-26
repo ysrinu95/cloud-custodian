@@ -31,7 +31,7 @@ policies:
       type: cloudtrail
       events:
         - CreateDBInstance
-      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
+
       tags: *tags
     filters:
       - type: value
@@ -54,8 +54,7 @@ policies:
       Notifies of RDS instances with engine upgrades available
     mode:
       type: periodic
-      schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
-      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
+      schedule: cron($1) $2
       tags: *tags
     filters:
       - type: upgrade-available
@@ -77,8 +76,7 @@ policies:
       Notifies of and deletes old RDS instance manual snapshots
     mode:
       type: periodic
-      schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
-      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
+      schedule: cron($1) $2
       tags: *tags      
     filters:    
       - type: value
@@ -105,8 +103,7 @@ policies:
       Notifies of and deletes old RDS cluster manual snapshots
     mode:
       type: periodic
-      schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
-      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
+      schedule: cron($1) $2
       tags: *tags      
     filters:
       - type: value
