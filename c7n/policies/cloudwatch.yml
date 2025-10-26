@@ -1,12 +1,12 @@
 vars:
   tags: &tags
-    contact: devops@yourcompany.com
+    contact: ysrinu95@gmail.com
     environment: "{environment}"
     repo: devops/cloud-custodian/c7n
   email-notify: &email-notify
     template: aws-basic_email.html
     to:
-      - CloudAdmin@yourcompany.com
+      - ysrinu95@gmail.om
       - event-owner
       - resource-owner
     transport:

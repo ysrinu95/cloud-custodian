@@ -7,7 +7,7 @@ set -e  # Exit on any error
 # Configuration
 config=config/mailer.yml
 templates_dir=config/mailer-templates
-AWS_REGION=${AWS_REGION:-us-west-2}
+AWS_REGION=${AWS_REGION:-us-east-1}
 
 echo "🚀 Starting Cloud Custodian Mailer Deployment with Comprehensive Fixes"
 echo "============================================================================"

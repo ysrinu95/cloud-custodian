@@ -89,12 +89,35 @@ variable "notification_email" {
   default     = "cloudadmin@yourcompany.com"
 }
 
+# GitHub repository for OIDC trust policy
+variable "github_repository" {
+  description = "GitHub repository in format owner/repo-name"
+  type        = string
+  default     = "ysrinu95/cloud-custodian"
+}
+
+# Enable enterprise features
+variable "enable_enterprise_features" {
+  description = "Enable enterprise features like SQS, SES, etc."
+  type        = bool
+  default     = true
+}
+
 # =====================================================
 # DATA SOURCES
 # =====================================================
 
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
+
+# Data sources for GitHub OIDC (from bootstrap)
+data "aws_iam_openid_connect_provider" "github" {
+  url = "https://token.actions.githubusercontent.com"
+}
+
+data "aws_iam_role" "github_actions" {
+  name = "GitHubActions-CloudCustodian-Role"
+}
 
 # =====================================================
 # RANDOM RESOURCES
@@ -169,164 +192,50 @@ resource "aws_sns_topic" "custodian_notifications" {
 # SQS RESOURCES
 # =====================================================
 
-# SQS Queue for Cloud Custodian mailer
+# SQS Queue for Cloud Custodian mailer (enterprise feature)
 resource "aws_sqs_queue" "custodian_mailer" {
+  count                     = var.enable_enterprise_features ? 1 : 0
   name                      = "custodian-mailer-queue"
   sqs_managed_sse_enabled   = true
   message_retention_seconds = 1209600 # 14 days
+
+  tags = {
+    Purpose = "Cloud Custodian Mailer"
+  }
 }
 
 # =====================================================
 # SES RESOURCES
 # =====================================================
 
-# SES Email Identity for notifications
+# SES Email Identity for notifications (enterprise feature)
 resource "aws_ses_email_identity" "custodian_notifications" {
-  count = var.notification_email != null ? 1 : 0
+  count = var.enable_enterprise_features && var.notification_email != null ? 1 : 0
   email = var.notification_email
 }
 
 # =====================================================
-# IAM RESOURCES
+# ENTERPRISE S3 RESOURCES
 # =====================================================
 
-# Cloud Custodian execution role
-resource "aws_iam_role" "custodian_execution" {
-  name = "CloudCustodian-ExecutionRole"
-  path = "/cloud-custodian/"
+# Additional S3 bucket for enterprise logging
+resource "aws_s3_bucket" "custodian_logs" {
+  count  = var.enable_enterprise_features ? 1 : 0
+  bucket = "ysr95-cloud-custodian-logs-${random_string.bucket_suffix.result}"
 
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "lambda.amazonaws.com"
-        }
-      }
-    ]
-  })
+  tags = {
+    Purpose = "Cloud Custodian Enterprise Logging"
+  }
 }
 
-# Lambda execution role (for backward compatibility)
-resource "aws_iam_role" "custodian_lambda_execution" {
-  name = "CloudCustodian-Lambda-ExecutionRole"
-  path = "/cloud-custodian/"
+# Enable versioning on the logs bucket
+resource "aws_s3_bucket_versioning" "custodian_logs" {
+  count  = var.enable_enterprise_features ? 1 : 0
+  bucket = aws_s3_bucket.custodian_logs[0].id
 
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "lambda.amazonaws.com"
-        }
-      }
-    ]
-  })
-}
-
-# Basic Lambda execution policy
-resource "aws_iam_role_policy_attachment" "custodian_lambda_basic_execution" {
-  role       = aws_iam_role.custodian_execution.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-}
-
-resource "aws_iam_role_policy_attachment" "custodian_lambda_execution_basic" {
-  role       = aws_iam_role.custodian_lambda_execution.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-}
-
-# Custom policy for Cloud Custodian
-resource "aws_iam_policy" "custodian_policy" {
-  name        = "CloudCustodian-Policy"
-  description = "Policy for Cloud Custodian execution"
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "ec2:*",
-          "s3:*",
-          "sns:Publish",
-          "sqs:SendMessage",
-          "logs:CreateLogGroup",
-          "logs:CreateLogStream",
-          "logs:PutLogEvents",
-          "cloudwatch:PutMetricData",
-          "sts:GetCallerIdentity"
-        ]
-        Resource = "*"
-      }
-    ]
-  })
-}
-
-# Attach policy to roles
-resource "aws_iam_role_policy_attachment" "custodian_execution_policy" {
-  role       = aws_iam_role.custodian_execution.name
-  policy_arn = aws_iam_policy.custodian_policy.arn
-}
-
-resource "aws_iam_role_policy_attachment" "custodian_lambda_policy" {
-  role       = aws_iam_role.custodian_lambda_execution.name
-  policy_arn = aws_iam_policy.custodian_policy.arn
-}
-
-# =====================================================
-# OUTPUTS
-# =====================================================
-
-# Cloud Custodian S3 Bucket
-output "custodian_outputs_bucket" {
-  description = "S3 bucket for Cloud Custodian outputs"
-  value       = aws_s3_bucket.custodian_outputs.bucket
-}
-
-# Cloud Custodian Log Group
-output "custodian_log_group" {
-  description = "CloudWatch log group for Cloud Custodian"
-  value       = aws_cloudwatch_log_group.custodian_logs.name
-}
-
-# SNS Topic for notifications
-output "custodian_sns_topic_arn" {
-  description = "SNS topic ARN for Cloud Custodian notifications"
-  value       = aws_sns_topic.custodian_notifications.arn
-}
-
-# SQS Queue URL for mailer
-output "custodian_mailer_queue_url" {
-  description = "SQS queue URL for Cloud Custodian mailer"
-  value       = aws_sqs_queue.custodian_mailer.url
-}
-
-# Primary Cloud Custodian execution role
-output "custodian_execution_role_arn" {
-  description = "Primary IAM role ARN for Cloud Custodian execution"
-  value       = aws_iam_role.custodian_execution.arn
-}
-
-# Legacy Lambda Execution Role
-output "custodian_lambda_role_arn" {
-  description = "IAM role ARN for Cloud Custodian Lambda functions"
-  value       = aws_iam_role.custodian_lambda_execution.arn
-}
-
-# AWS Account ID
-output "aws_account_id" {
-  description = "AWS Account ID"
-  value       = data.aws_caller_identity.current.account_id
-}
-
-# AWS Region
-output "aws_region" {
-  description = "AWS Region"
-  value       = data.aws_region.current.name
+  versioning_configuration {
+    status = "Enabled"
+  }
 }
 
 # =====================================================
@@ -347,6 +256,22 @@ resource "aws_iam_role" "custodian_execution" {
         Effect = "Allow"
         Principal = {
           Service = "lambda.amazonaws.com"
+        }
+      },
+      {
+        Sid    = "AllowGitHubActionsAssumeRole"
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Federated = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/token.actions.githubusercontent.com"
+        }
+        Condition = {
+          StringEquals = {
+            "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+          }
+          StringLike = {
+            "token.actions.githubusercontent.com:sub" = "repo:${var.github_repository}:*"
+          }
         }
       }
     ]
@@ -421,15 +346,16 @@ resource "aws_iam_policy" "custodian_lambda_policy" {
   })
 }
 
-# Attach custom policy to both roles
+# Attach custom policy to lambda execution role (legacy)
 resource "aws_iam_role_policy_attachment" "lambda_custodian_policy" {
   role       = aws_iam_role.custodian_lambda_execution.name
   policy_arn = aws_iam_policy.custodian_lambda_policy.arn
 }
 
-resource "aws_iam_role_policy_attachment" "custodian_execution_policy" {
+# Attach AdministratorAccess to primary execution role for comprehensive Cloud Custodian operations
+resource "aws_iam_role_policy_attachment" "custodian_execution_admin_access" {
   role       = aws_iam_role.custodian_execution.name
-  policy_arn = aws_iam_policy.custodian_lambda_policy.arn
+  policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
 }
 
 # =====================================================
