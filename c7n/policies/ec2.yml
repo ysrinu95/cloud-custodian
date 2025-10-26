@@ -29,7 +29,7 @@ policies:
       Notifies of instances found with a public IP address
     mode:
       type: periodic
-      schedule: cron($1) $2
+      schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
       tags: *tags
     filters:
       - type: value

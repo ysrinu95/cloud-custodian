@@ -35,7 +35,7 @@ policies:
       Notifies of Lambda functions using deprecated runtimes
     mode:
       type: periodic
-      schedule: cron($1) $2
+      schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
       tags: *tags
     filters:
       - type: value
@@ -65,7 +65,7 @@ policies:
       Notifies of Lambda functions using oudated runtimes that will be deprecated soon
     mode:
       type: periodic
-      schedule: cron($1) $2
+      schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
       tags: *tags
     filters:
       - type: value
@@ -119,7 +119,7 @@ policies:
       Notifies of Lambda functions appear to be unused.
     mode:
       type: periodic
-      schedule: cron($1) $2
+      schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
       tags: *tags
     filters:
       # not invoked in last year

@@ -31,7 +31,7 @@ policies:
       Notifies of S3 buckets without encyrption enabled
     mode:
       type: periodic
-      schedule: cron($1) $2
+      schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
       tags: *tags
     filters:
       - type: bucket-encryption
@@ -53,7 +53,7 @@ policies:
       Notifies of S3 buckets that do not have public access fully restricted
     mode:
       type: periodic
-      schedule: cron($1) $2
+      schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
       tags: *tags
     filters:
       - type: check-public-block

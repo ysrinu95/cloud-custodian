@@ -54,7 +54,7 @@ policies:
       Notifies of RDS instances with engine upgrades available
     mode:
       type: periodic
-      schedule: cron($1) $2
+      schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
       tags: *tags
     filters:
       - type: upgrade-available
@@ -76,7 +76,7 @@ policies:
       Notifies of and deletes old RDS instance manual snapshots
     mode:
       type: periodic
-      schedule: cron($1) $2
+      schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
       tags: *tags      
     filters:    
       - type: value
@@ -103,7 +103,7 @@ policies:
       Notifies of and deletes old RDS cluster manual snapshots
     mode:
       type: periodic
-      schedule: cron($1) $2
+      schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
       tags: *tags      
     filters:
       - type: value
