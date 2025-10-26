@@ -14,8 +14,8 @@ policies:
         - AuthorizeSecurityGroupEgress
       role: arn:aws:iam::{account_id}:role/cloud-custodian-stepfunction-role
     filters:
-      - type: instance-attribute
-        attribute: state-name
+      - type: value
+        key: State.Name
         value: running
       - or:
           # Check for instances with public IP addresses
@@ -64,13 +64,13 @@ policies:
       schedule: "rate(6 hours)"
       role: arn:aws:iam::{account_id}:role/cloud-custodian-stepfunction-role
     filters:
-      - type: instance-attribute
-        attribute: state-name
+      - type: value
+        key: State.Name
         value: running
       - or:
-          - type: instance-attribute
-            attribute: public-ip-address
-            value: present
+          - type: value
+            key: PublicIpAddress
+            value: not-null
           - type: security-group
             key: "IpPermissions[].IpRanges[].CidrIp"
             value: "0.0.0.0/0"
@@ -78,6 +78,8 @@ policies:
             operator: contains
       # Only process instances that haven't been processed recently
       - not:
+          - type: tag-key
+            key: "custodian:stepfunction-processed"
           - type: tag-key
             key: "custodian:stepfunction-processed"
     actions:
