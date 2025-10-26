@@ -63,13 +63,13 @@ on:
   push:
     branches: [main]
     paths:
-      - 'c7n/policies/**'
+      - 'policies/**'
       - 'c7n/scripts/**'
       - '.github/workflows/cloud-custodian-policies.yml'
   
   pull_request:
     paths:
-      - 'c7n/policies/**'
+      - 'policies/**'
       - 'c7n/scripts/**'
       - '.github/workflows/cloud-custodian-policies.yml'
 
@@ -151,22 +151,21 @@ jobs:
         id: validation
         run: |
           echo "🔍 Validating Cloud Custodian policy syntax..."
-          cd c7n
           
           validation_failed=false
           policy_count=0
           
-          # Check for policy files specifically in c7n/policies directory
-          POLICY_DIR="c7n/policies"
+          # Check for policy files specifically in policies directory (root level)
+          POLICY_DIR="policies"
           echo "📁 Looking for policy files in: $POLICY_DIR"
           
           if [ ! -d "$POLICY_DIR" ]; then
             echo "❌ Policy directory not found: $POLICY_DIR"
-            echo "💡 Expected policy location: c7n/policies/"
+            echo "💡 Expected policy location: policies/"
             validation_failed=true
           elif ! ls "$POLICY_DIR"/*.yml 1> /dev/null 2>&1; then
             echo "❌ No policy files (*.yml) found in: $POLICY_DIR"
-            echo "💡 Please ensure policy files are placed in c7n/policies/ directory"
+            echo "💡 Please ensure policy files are placed in policies/ directory"
             validation_failed=true
           else
             echo "✅ Found policy files in: $POLICY_DIR"
@@ -190,11 +189,11 @@ jobs:
           
           echo "📊 Validation Summary:"
           echo "  - Total policies validated: $policy_count"
-          echo "  - Policy directory: c7n/policies/"
+          echo "  - Policy directory: policies/"
           
           if [ "$policy_count" -eq 0 ]; then
-            echo "❌ No policies found to validate in c7n/policies/"
-            echo "💡 Please ensure policy files are placed in c7n/policies/ directory"
+            echo "❌ No policies found to validate in policies/"
+            echo "💡 Please ensure policy files are placed in policies/ directory"
             validation_failed=true
           fi
           
@@ -204,7 +203,7 @@ jobs:
             echo "passed=false" >> $GITHUB_OUTPUT
             exit 1
           else
-            echo "✅ All $policy_count policies validated successfully from c7n/policies/"
+            echo "✅ All $policy_count policies validated successfully from policies/"
             echo "🎯 Deployment operations are authorized to proceed"
             echo "passed=true" >> $GITHUB_OUTPUT
           fi  # ==============================================================================
@@ -616,7 +615,6 @@ jobs:
         if: github.event_name == 'pull_request' || github.event_name == 'push'
         run: |
           echo "🔍 Detecting changed policies..."
-          cd c7n
           
           # Set up git refs for comparison
           if [ "${{ github.event_name }}" = "pull_request" ]; then
@@ -631,9 +629,9 @@ jobs:
             echo "📋 Comparing push changes: $base_ref → $head_ref"
           fi
           
-          # Check for changed policy files specifically in c7n/policies directory
+          # Check for changed policy files specifically in policies directory
           changed_files=$(git diff --name-only "$base_ref" "$head_ref" -- policies/ 2>/dev/null || echo "")
-          echo "📄 Changed policy files in c7n/policies/: $changed_files"
+          echo "📄 Changed policy files in policies/: $changed_files"
           
           changed_policies=""
           
@@ -686,9 +684,8 @@ jobs:
         if: steps.change-detection.outputs.policies != ''
         run: |
           echo "🧪 Running dry-run on changed policies..."
-          cd c7n
           
-          mkdir -p ../artifacts/validation-dryrun
+          mkdir -p artifacts/validation-dryrun
           
           # Create a single-account config for validation using development account
           cat > validation-accounts.yml << EOF
@@ -727,7 +724,7 @@ jobs:
                 echo "  📄 Found in: $found_file"
                 echo "  🚀 Running dry-run against account: engg"
                 
-                if c7n-org run --cache-period=0 -c validation-accounts.yml -s ../artifacts/validation-dryrun -u "$found_file" -p "$policy" --dryrun; then
+                if c7n-org run --cache-period=0 -c validation-accounts.yml -s artifacts/validation-dryrun -u "$found_file" -p "$policy" --dryrun; then
                   echo "  ✅ Dry-run completed successfully for: $policy"
                   tested_count=$((tested_count + 1))
                 else
