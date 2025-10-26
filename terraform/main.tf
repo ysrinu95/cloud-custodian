@@ -115,8 +115,123 @@ data "aws_iam_openid_connect_provider" "github" {
   url = "https://token.actions.githubusercontent.com"
 }
 
+# GitHub Actions IAM Role (referenced, not managed here)
 data "aws_iam_role" "github_actions" {
   name = "GitHubActions-CloudCustodian-Role"
+}
+
+# Custom policy for GitHub Actions role to support Terraform operations
+resource "aws_iam_policy" "github_actions_terraform_policy" {
+  name        = "GitHubActions-Terraform-Policy"
+  description = "Additional permissions for GitHub Actions to manage Terraform resources"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "TerraformS3Operations"
+        Effect = "Allow"
+        Action = [
+          "s3:*"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "TerraformSQSOperations"
+        Effect = "Allow"
+        Action = [
+          "sqs:*"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "TerraformSESOperations"
+        Effect = "Allow"
+        Action = [
+          "ses:*"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "TerraformSNSOperations"
+        Effect = "Allow"
+        Action = [
+          "sns:*"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "TerraformCloudWatchOperations"
+        Effect = "Allow"
+        Action = [
+          "logs:*",
+          "cloudwatch:*"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "TerraformIAMOperations"
+        Effect = "Allow"
+        Action = [
+          "iam:GetRole",
+          "iam:GetPolicy",
+          "iam:GetPolicyVersion",
+          "iam:ListAttachedRolePolicies",
+          "iam:AttachRolePolicy",
+          "iam:DetachRolePolicy",
+          "iam:CreateRole",
+          "iam:DeleteRole",
+          "iam:UpdateRole",
+          "iam:CreatePolicy",
+          "iam:DeletePolicy",
+          "iam:TagRole",
+          "iam:UntagRole",
+          "iam:TagPolicy",
+          "iam:UntagPolicy",
+          "iam:PassRole",
+          "iam:ListRoles",
+          "iam:ListPolicies"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "TerraformLambdaOperations"
+        Effect = "Allow"
+        Action = [
+          "lambda:*"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "TerraformEC2Operations"
+        Effect = "Allow"
+        Action = [
+          "ec2:Describe*",
+          "ec2:Get*",
+          "ec2:List*"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "TerraformEventsOperations"
+        Effect = "Allow"
+        Action = [
+          "events:*"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+
+  tags = {
+    Purpose = "GitHub Actions Terraform Support"
+  }
+}
+
+# Attach the additional policy to the GitHub Actions role
+resource "aws_iam_role_policy_attachment" "github_actions_terraform_policy" {
+  role       = data.aws_iam_role.github_actions.name
+  policy_arn = aws_iam_policy.github_actions_terraform_policy.arn
 }
 
 # =====================================================
