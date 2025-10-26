@@ -158,7 +158,7 @@ jobs:
           policy_count=0
           
           # Check for policy files specifically in c7n/policies directory
-          POLICY_DIR="policies"
+          POLICY_DIR="c7n/policies"
           echo "📁 Looking for policy files in: $POLICY_DIR"
           
           if [ ! -d "$POLICY_DIR" ]; then
