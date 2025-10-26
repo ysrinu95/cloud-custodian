@@ -9,7 +9,7 @@ policies:
       type: cloudtrail
       events:
         - RunInstances
-      role: arn:aws:iam::{account_id}:role/cloud-custodian-stepfunction-role
+      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
     filters:
       - type: value
         key: State.Name
@@ -30,7 +30,7 @@ policies:
     mode:
       type: periodic
       schedule: "rate(6 hours)"
-      role: arn:aws:iam::{account_id}:role/cloud-custodian-stepfunction-role
+      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
     filters:
       - type: value
         key: State.Name

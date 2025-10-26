@@ -32,7 +32,7 @@ policies:
     mode:
       type: periodic
       schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
-      role: arn:aws:iam::{account_id}:role/cloud-custodian/CloudCustodian-ExecutionRole
+      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
       tags: *tags
     filters:
       - type: bucket-encryption
@@ -55,7 +55,7 @@ policies:
     mode:
       type: periodic
       schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
-      role: arn:aws:iam::{account_id}:role/cloud-custodian/CloudCustodian-ExecutionRole
+      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
       tags: *tags
     filters:
       - type: check-public-block
