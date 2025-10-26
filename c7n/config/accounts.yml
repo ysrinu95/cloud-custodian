@@ -3,8 +3,7 @@ accounts:
   name: engg
   regions:
   - us-east-1
-  - us-east-2
-  role: arn:aws:iam::172327596604:role/CloudCustodian-Lambda-ExecutionRole
+  role: arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole
   # profile: engg # local
   vars:
     environment: engg
