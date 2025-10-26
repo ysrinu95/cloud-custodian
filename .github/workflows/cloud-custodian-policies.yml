@@ -63,14 +63,14 @@ on:
   push:
     branches: [main]
     paths:
-      - 'c7n/**'
-      - 'policies/**'
+      - 'c7n/policies/**'
+      - 'c7n/scripts/**'
       - '.github/workflows/cloud-custodian-policies.yml'
   
   pull_request:
     paths:
-      - 'c7n/**'
-      - 'policies/**'
+      - 'c7n/policies/**'
+      - 'c7n/scripts/**'
       - '.github/workflows/cloud-custodian-policies.yml'
 
 env:
@@ -157,44 +157,45 @@ jobs:
           validation_failed=false
           policy_count=0
           
-          # Check if policy files exist in various possible locations
-          policy_dirs=("policies" "c7n/policies" ".")
-          found_policies=false
+          # Check for policy files specifically in c7n/policies directory
+          POLICY_DIR="policies"
+          echo "📁 Looking for policy files in: $POLICY_DIR"
           
-          for dir in "${policy_dirs[@]}"; do
-            if ls "$dir"/*.yml 1> /dev/null 2>&1; then
-              echo "📁 Found policy files in: $dir"
-              found_policies=true
-              
-              # Validate each policy file in this directory
-              for policy_file in "$dir"/*.yml; do
-                if [ -f "$policy_file" ]; then
-                  policy_count=$((policy_count + 1))
-                  echo "  Validating: $policy_file"
-                  
-                  # Check Cloud Custodian schema
-                  if ! custodian validate "$policy_file"; then
-                    echo "❌ Cloud Custodian validation failed for: $policy_file"
-                    validation_failed=true
-                  else
-                    echo "✅ Validation passed for: $policy_file"
-                  fi
-                fi
-              done
-              break  # Use first directory that has policies
-            fi
-          done
-          
-          if [ ! "$found_policies" = true ]; then
-            echo "❌ No policy files found in any expected directory"
+          if [ ! -d "$POLICY_DIR" ]; then
+            echo "❌ Policy directory not found: $POLICY_DIR"
+            echo "💡 Expected policy location: c7n/policies/"
             validation_failed=true
+          elif ! ls "$POLICY_DIR"/*.yml 1> /dev/null 2>&1; then
+            echo "❌ No policy files (*.yml) found in: $POLICY_DIR"
+            echo "💡 Please ensure policy files are placed in c7n/policies/ directory"
+            validation_failed=true
+          else
+            echo "✅ Found policy files in: $POLICY_DIR"
+            
+            # Validate each policy file in the policies directory
+            for policy_file in "$POLICY_DIR"/*.yml; do
+              if [ -f "$policy_file" ]; then
+                policy_count=$((policy_count + 1))
+                echo "  📄 Validating: $policy_file"
+                
+                # Check Cloud Custodian schema
+                if ! custodian validate "$policy_file"; then
+                  echo "❌ Cloud Custodian validation failed for: $policy_file"
+                  validation_failed=true
+                else
+                  echo "✅ Validation passed for: $policy_file"
+                fi
+              fi
+            done
           fi
           
           echo "📊 Validation Summary:"
           echo "  - Total policies validated: $policy_count"
+          echo "  - Policy directory: c7n/policies/"
           
           if [ "$policy_count" -eq 0 ]; then
-            echo "❌ No policies found to validate"
+            echo "❌ No policies found to validate in c7n/policies/"
+            echo "💡 Please ensure policy files are placed in c7n/policies/ directory"
             validation_failed=true
           fi
           
@@ -204,7 +205,7 @@ jobs:
             echo "passed=false" >> $GITHUB_OUTPUT
             exit 1
           else
-            echo "✅ All $policy_count policies validated successfully"
+            echo "✅ All $policy_count policies validated successfully from c7n/policies/"
             echo "🎯 Deployment operations are authorized to proceed"
             echo "passed=true" >> $GITHUB_OUTPUT
           fi  # ==============================================================================
@@ -629,9 +630,9 @@ jobs:
             echo "📋 Comparing push changes: $base_ref → $head_ref"
           fi
           
-          # Check for changed policy files first
+          # Check for changed policy files specifically in c7n/policies directory
           changed_files=$(git diff --name-only "$base_ref" "$head_ref" -- policies/ 2>/dev/null || echo "")
-          echo "📄 Changed policy files: $changed_files"
+          echo "📄 Changed policy files in c7n/policies/: $changed_files"
           
           changed_policies=""
           
