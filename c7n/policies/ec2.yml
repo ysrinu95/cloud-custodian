@@ -3,15 +3,6 @@ vars:
     contact: ysrinu95@gmail.com
     environment: "{environment}"
     repo: devops/cloud-custodian/c7n
-  slack-notify: &slack-notify
-    slack_template: slack_default
-    slack_msg_color: danger
-    violation_desc:
-    to:
-      - https://hooks.slack.com/services/YOUR_SLACK_WORKSPACE/YOUR_SLACK_CHANNEL/YOUR_SLACK_TOKEN # cloud-custodian channel
-    transport:
-      type: sqs
-      queue: https://sqs.us-east-1.amazonaws.com/172327596604/custodian-mailer-queue
   email-notify: &email-notify
     template: aws-basic_email.html
     to:

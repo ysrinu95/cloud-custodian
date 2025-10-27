@@ -2,7 +2,7 @@
 # Deploys c7n policies
 
 config=config/accounts.yml
-output_dir=s3://gs-s3-cloud-custodian-logs
+output_dir=s3://ysr95-cloud-custodian-logs-26zsuuw4
 policy_dir=policies
 dryrun=
 account=
