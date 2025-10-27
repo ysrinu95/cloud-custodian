@@ -13,7 +13,7 @@ policies:
         - source: aws.guardduty
           event: CreateFinding
           ids: "detail.id"
-
+      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
       timeout: 300
       tags:
         contact: srinivasula.yallala@optum.com
@@ -53,18 +53,16 @@ policies:
         severity_label: HIGH
         types:
           - "Software and Configuration Checks/AWS Security Best Practices"
-      # Send notification via SNS/Slack
+      # Send notification via email
       - type: notify
-        template: aws-guardduty-finding_slack
+        template: aws-basic_email
         priority_header: "1"
-        slack_template: slack
         violation_desc: "GuardDuty High Severity Finding Detected"
         action_desc: |
           A high or critical severity GuardDuty finding has been detected.
           Immediate investigation and remediation required.
         to:
           - security-team@optum.com
-          - slack://security-alerts
         transport:
           type: sqs
           queue: https://sqs.us-east-1.amazonaws.com/172327596604/custodian-mailer-queue
@@ -83,7 +81,7 @@ policies:
         - source: aws.config
           event: PutEvaluations
           ids: "requestParameters.evaluations[].complianceResourceId"
-
+      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
       timeout: 300
       tags:
         contact: srinivasula.yallala@optum.com
@@ -148,7 +146,7 @@ policies:
         - source: aws.securityhub
           event: BatchImportFindings
           ids: "detail.findings[].Id"
-
+      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
       timeout: 300
       tags:
         contact: srinivasula.yallala@optum.com
@@ -196,16 +194,14 @@ policies:
           - "Software and Configuration Checks/AWS Security Best Practices"
       # Send notification
       - type: notify
-        template: aws-securityhub-finding_slack
+        template: aws-basic_email
         priority_header: "1"
-        slack_template: slack
         violation_desc: "Security Hub Critical Finding Detected"
         action_desc: |
           A critical or high severity Security Hub finding has been detected.
           This may indicate a security misconfiguration or vulnerability.
         to:
           - security-team@optum.com
-          - slack://security-alerts
         transport:
           type: sqs
           queue: https://sqs.us-east-1.amazonaws.com/172327596604/custodian-mailer-queue
@@ -224,7 +220,7 @@ policies:
         - source: macie2.amazonaws.com
           event: ClassificationResult
           ids: "detail.resourcesAffected.s3Bucket.name"
-
+      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
       timeout: 300
       tags:
         contact: srinivasula.yallala@optum.com
@@ -291,7 +287,7 @@ policies:
         - source: access-analyzer.amazonaws.com
           event: CreateFinding
           ids: "detail.id"
-
+      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
       timeout: 300
       tags:
         contact: srinivasula.yallala@optum.com
@@ -329,9 +325,8 @@ policies:
           - "Software and Configuration Checks/AWS Security Best Practices"
       # Send notification
       - type: notify
-        template: aws-iam-user_slack
+        template: aws-basic_email
         priority_header: "2"
-        slack_template: slack
         violation_desc: "IAM Access Analyzer External Access Detected"
         action_desc: |
           IAM Access Analyzer has detected that a resource is accessible by an external principal.
@@ -339,7 +334,6 @@ policies:
         to:
           - iam-team@optum.com
           - security-team@optum.com
-          - slack://iam-alerts
         transport:
           type: sqs
           queue: https://sqs.us-east-1.amazonaws.com/172327596604/custodian-mailer-queue
@@ -364,7 +358,7 @@ policies:
         - source: s3.amazonaws.com
           event: PutBucketPolicy
           ids: "requestParameters.bucketName"
-
+      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
       timeout: 300
       tags:
         contact: srinivasula.yallala@optum.com
@@ -405,16 +399,14 @@ policies:
         enabled: true
       # Send alert
       - type: notify
-        template: aws-basic-resource-names_slack
+        template: aws-basic_email
         priority_header: "2"
-        slack_template: slack
         violation_desc: "Suspicious S3 Access Pattern Detected"
         action_desc: |
           Suspicious access patterns detected in S3 access logs.
           This may indicate unauthorized access or data exfiltration attempts.
         to:
           - security-operations@optum.com
-          - slack://security-alerts
         transport:
           type: sqs
           queue: https://sqs.us-east-1.amazonaws.com/172327596604/custodian-mailer-queue
@@ -473,7 +465,7 @@ policies:
         - source: signin.amazonaws.com
           event: ConsoleLogin
           ids: "userIdentity.accountId"
-
+      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
       timeout: 300
       tags:
         contact: srinivasula.yallala@optum.com
@@ -517,9 +509,8 @@ policies:
     actions:
       # Send high-priority alert
       - type: notify
-        template: aws-account-root-user-login-detected_slack
+        template: aws-basic_email
         priority_header: "1"
-        slack_template: slack
         violation_desc: "Critical CloudTrail Security Event Detected"
         action_desc: |
           A critical security event has been detected in CloudTrail logs.
@@ -534,7 +525,6 @@ policies:
         to:
           - security-operations@optum.com
           - security-team@optum.com
-          - slack://critical-security-alerts
         transport:
           type: sqs
           queue: https://sqs.us-east-1.amazonaws.com/172327596604/custodian-mailer-queue
@@ -560,7 +550,7 @@ policies:
         - source: ec2.amazonaws.com
           event: ModifyInstanceAttribute
           ids: "requestParameters.instanceId"
-
+      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
       timeout: 300
       tags:
         contact: srinivasula.yallala@optum.com
@@ -608,9 +598,8 @@ policies:
         value: "{now:%Y-%m-%d %H:%M:%S UTC}"
       # Send immediate notification
       - type: notify
-        template: aws-ec2-public-instance_slack
+        template: aws-basic_email
         priority_header: "1"
-        slack_template: slack
         violation_desc: "Public EC2 Instance Detected - Step Function Triggered"
         action_desc: |
           🚨 SECURITY ALERT: Public EC2 Instance Detected
@@ -632,7 +621,6 @@ policies:
         to:
           - security-team@optum.com
           - infrastructure-team@optum.com
-          - slack://security-alerts
         transport:
           type: sqs
           queue: https://sqs.us-east-1.amazonaws.com/172327596604/custodian-mailer-queue
@@ -646,6 +634,7 @@ policies:
     mode:
       type: periodic
       schedule: "rate(1 hour)"
+      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
 
       tags:
         contact: srinivasula.yallala@optum.com
@@ -707,6 +696,7 @@ policies:
     mode:
       type: periodic
       schedule: "cron(0 23 ? * SUN *)"  # 9 AM UTC daily
+      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
 
       tags:
         contact: srinivasula.yallala@optum.com
