@@ -27,7 +27,7 @@ policies:
     mode:
       type: periodic
       schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
-      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
+      role: arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole
       tags: *tags
     filters:
       - type: value
@@ -58,7 +58,7 @@ policies:
     mode:
       type: periodic
       schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
-      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
+      role: arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole
       tags: *tags
     filters:
       - type: value
@@ -88,7 +88,7 @@ policies:
       Notify when a Lambda function is created with an outdated runtime.
     mode:
       type: cloudtrail
-      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
+      role: arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole
       events:
         - CreateFunction
     filters:
@@ -113,7 +113,7 @@ policies:
     mode:
       type: periodic
       schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
-      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
+      role: arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole
       tags: *tags
     filters:
       # not invoked in last year

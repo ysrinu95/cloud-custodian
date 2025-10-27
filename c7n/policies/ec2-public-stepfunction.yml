@@ -9,7 +9,7 @@ policies:
       type: cloudtrail
       events:
         - RunInstances
-      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
+      role: arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole
 
     filters:
       - type: value
@@ -21,7 +21,7 @@ policies:
         value: not-null
     actions:
       - type: invoke-sfn
-        state-machine: arn:aws:states:{region}:{account_id}:stateMachine:EC2PublicInstanceRemediation
+        state-machine: arn:aws:states:{region}:172327596604:stateMachine:EC2PublicInstanceRemediation
 
   - name: ec2-public-instances-periodic-check
     description: |
@@ -31,7 +31,7 @@ policies:
     mode:
       type: periodic
       schedule: "rate(6 hours)"
-      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
+      role: arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole
 
     filters:
       - type: value
@@ -47,4 +47,4 @@ policies:
         value: 0
     actions:
       - type: invoke-sfn
-        state-machine: arn:aws:states:{region}:{account_id}:stateMachine:EC2PublicInstanceRemediation
+        state-machine: arn:aws:states:{region}:172327596604:stateMachine:EC2PublicInstanceRemediation

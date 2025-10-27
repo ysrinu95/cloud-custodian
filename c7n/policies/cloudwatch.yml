@@ -21,7 +21,7 @@ policies:
     mode:
       type: periodic
       schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
-      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
+      role: arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole
       tags: *tags
     filters:
       # not written to in last year
@@ -51,7 +51,7 @@ policies:
     mode:
       type: periodic
       schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
-      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
+      role: arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole
       tags: *tags
     filters:
      - type: value
@@ -76,7 +76,7 @@ policies:
     mode:
       type: periodic
       schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
-      role: arn:aws:iam::{account_id}:role/CloudCustodian-ExecutionRole
+      role: arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole
       tags: *tags
     filters:
       - retentionInDays: absent
