@@ -1,0 +1,138 @@
+{
+  "policy": {
+    "name": "aws-lambda-deprecated-runtimes",
+    "resource": "aws.lambda",
+    "description": "Notifies of Lambda functions using deprecated runtimes\n",
+    "mode": {
+      "type": "periodic",
+      "schedule": "cron(0, 23, ?, *, SUN, *)",
+      "role": "arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole",
+      "tags": {
+        "contact": "ysrinu95@gmail.com",
+        "environment": "{environment}",
+        "repo": "devops/cloud-custodian/c7n"
+      }
+    },
+    "filters": [
+      {
+        "type": "value",
+        "key": "Runtime",
+        "value": [
+          "nodejs",
+          "dotnetcore2.0",
+          "dotnetcore1.0",
+          "nodejs6.10",
+          "nodejs4.3-edge",
+          "nodejs4.3",
+          "nodejs8.10",
+          "python2.7",
+          "ruby2.5",
+          "nodejs10.x",
+          "dotnetcore2.1",
+          "dotnet5.0",
+          "python3.6",
+          "nodejs12.x",
+          "dotnetcore3.1",
+          "python3.7",
+          "nodejs14.x",
+          "ruby2.7",
+          "provided",
+          "go1.x",
+          "java8",
+          "dotnet6",
+          "dotnet7",
+          "nodejs16.x",
+          "python3.8"
+        ],
+        "op": "in"
+      },
+      {
+        "not": [
+          {
+            "type": "value",
+            "key": "FunctionName",
+            "op": "regex",
+            "value": "(aws-controltower)-\\w+",
+            "value_type": "normalize"
+          }
+        ]
+      }
+    ],
+    "actions": [
+      {
+        "template": "aws-basic_email.html",
+        "to": [
+          "ysrinu95@gmail.com",
+          "event-owner",
+          "resource-owner"
+        ],
+        "transport": {
+          "type": "sqs",
+          "queue": "https://sqs.us-east-1.amazonaws.com/172327596604/custodian-mailer-queue"
+        },
+        "type": "notify",
+        "subject": "[c7n] [{{ account }}] Lambda Functions Using Deprecated Runtimes Report ({{ region }})",
+        "violation_desc": "Lambda functions configured to use a deprecated runtime",
+        "action_desc": "No action taken. Functions MUST be updated to the latest runtime.<br>\nThese functions can no longer be updated and are not receiving security patches.<br>\n<a href=\"https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html\">Documentation</a>\n"
+      }
+    ]
+  },
+  "version": "0.9.47",
+  "execution": {
+    "id": "e7e0426d-d78a-4cba-9f86-e676e4ee3505",
+    "start": 1761554022.6993537,
+    "end_time": 1761554023.9869604,
+    "duration": 1.2876067161560059
+  },
+  "config": {
+    "region": "us-east-1",
+    "regions": [
+      "us-east-1"
+    ],
+    "cache": "~/.cache/cloud-custodian.cache",
+    "profile": null,
+    "account_id": "172327596604",
+    "assume_role": null,
+    "session_policy": null,
+    "external_id": null,
+    "log_group": null,
+    "tracer": null,
+    "metrics_enabled": null,
+    "metrics": null,
+    "output_dir": "output_local",
+    "cache_period": 15,
+    "dryrun": true,
+    "authorization_file": null,
+    "subparser": "run",
+    "config": null,
+    "configs": [
+      "c7n\\policies\\lambda.yml"
+    ],
+    "policy_filters": [],
+    "resource_types": [],
+    "verbose": null,
+    "quiet": null,
+    "debug": false,
+    "skip_validation": false,
+    "command": "c7n.commands.run",
+    "vars": null
+  },
+  "sys-stats": {},
+  "api-stats": {
+    "lambda.ListFunctions": 1
+  },
+  "metrics": [
+    {
+      "MetricName": "ResourceCount",
+      "Timestamp": "2025-10-27T14:03:43.985313",
+      "Value": 0,
+      "Unit": "Count"
+    },
+    {
+      "MetricName": "ResourceTime",
+      "Timestamp": "2025-10-27T14:03:43.985313",
+      "Value": 1.2773795127868652,
+      "Unit": "Seconds"
+    }
+  ]
+}

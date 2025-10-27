@@ -1,0 +1,91 @@
+{
+  "policy": {
+    "name": "ec2-public-instances-periodic-check",
+    "description": "Periodic check for public EC2 instances using Step Function remediation.\nRuns every 6 hours to catch instances that may have been missed by real-time monitoring.\n",
+    "resource": "aws.ec2",
+    "mode": {
+      "type": "periodic",
+      "schedule": "rate(6 hours)",
+      "role": "arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole"
+    },
+    "filters": [
+      {
+        "type": "value",
+        "key": "State.Name",
+        "value": "running"
+      },
+      {
+        "type": "value",
+        "key": "PublicIpAddress",
+        "value": "not-null"
+      },
+      {
+        "type": "value",
+        "key": "Tags[?Key == 'custodian:stepfunction-processed'] | length(@)",
+        "value": 0
+      }
+    ],
+    "actions": [
+      {
+        "type": "invoke-sfn",
+        "state-machine": "arn:aws:states:us-east-1:172327596604:stateMachine:EC2PublicInstanceRemediation"
+      }
+    ]
+  },
+  "version": "0.9.47",
+  "execution": {
+    "id": "86da4a07-afac-4a3f-ae5d-fb9c9f2f7361",
+    "start": 1761554052.4356875,
+    "end_time": 1761554052.444296,
+    "duration": 0.008608341217041016
+  },
+  "config": {
+    "region": "us-east-1",
+    "regions": [
+      "us-east-1"
+    ],
+    "cache": "~/.cache/cloud-custodian.cache",
+    "profile": null,
+    "account_id": "172327596604",
+    "assume_role": null,
+    "session_policy": null,
+    "external_id": null,
+    "log_group": null,
+    "tracer": null,
+    "metrics_enabled": null,
+    "metrics": null,
+    "output_dir": "output_local",
+    "cache_period": 15,
+    "dryrun": true,
+    "authorization_file": null,
+    "subparser": "run",
+    "config": null,
+    "configs": [
+      "c7n\\policies\\ec2-public-stepfunction.yml"
+    ],
+    "policy_filters": [],
+    "resource_types": [],
+    "verbose": null,
+    "quiet": null,
+    "debug": false,
+    "skip_validation": false,
+    "command": "c7n.commands.run",
+    "vars": null
+  },
+  "sys-stats": {},
+  "api-stats": {},
+  "metrics": [
+    {
+      "MetricName": "ResourceCount",
+      "Timestamp": "2025-10-27T14:04:12.435687",
+      "Value": 0,
+      "Unit": "Count"
+    },
+    {
+      "MetricName": "ResourceTime",
+      "Timestamp": "2025-10-27T14:04:12.435687",
+      "Value": 0.0,
+      "Unit": "Seconds"
+    }
+  ]
+}

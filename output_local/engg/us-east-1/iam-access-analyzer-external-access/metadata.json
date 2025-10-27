@@ -1,0 +1,119 @@
+{
+  "policy": {
+    "name": "iam-access-analyzer-external-access",
+    "description": "Respond to IAM Access Analyzer findings indicating external access to resources.\nThis policy triggers when resources are shared with external principals.\n",
+    "resource": "aws.access-analyzer-finding",
+    "mode": {
+      "type": "cloudtrail",
+      "events": [
+        {
+          "source": "access-analyzer.amazonaws.com",
+          "event": "CreateFinding",
+          "ids": "detail.id"
+        }
+      ],
+      "role": "arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole",
+      "timeout": 300,
+      "tags": {
+        "contact": "srinivasula.yallala@optum.com",
+        "repo": "aikyam-everything-as-code",
+        "terraform": "True",
+        "oid-owned": "True",
+        "aide-id": "UHGWM110-019726",
+        "service-tier": "p1",
+        "application": "cloud-custodian",
+        "managed-by": "jenkins",
+        "environment": "engg",
+        "component": "cloud-custodian-policy",
+        "policy-type": "security-findings",
+        "security-service": "access-analyzer"
+      }
+    },
+    "filters": [
+      {
+        "type": "value",
+        "key": "status",
+        "value": "ACTIVE"
+      },
+      {
+        "type": "value",
+        "key": "resourceType",
+        "op": "in",
+        "value": [
+          "AWS::S3::Bucket",
+          "AWS::IAM::Role",
+          "AWS::KMS::Key",
+          "AWS::Lambda::Function",
+          "AWS::SQS::Queue"
+        ]
+      }
+    ],
+    "actions": [
+      {
+        "type": "post-finding",
+        "compliance_status": "WARNING",
+        "types": [
+          "Software and Configuration Checks/AWS Security Best Practices"
+        ]
+      },
+      {
+        "type": "notify",
+        "template": "aws-basic_email",
+        "priority_header": "2",
+        "violation_desc": "IAM Access Analyzer External Access Detected",
+        "action_desc": "IAM Access Analyzer has detected that a resource is accessible by an external principal.\nReview the finding to determine if this access is intended.\n",
+        "to": [
+          "iam-team@optum.com",
+          "security-team@optum.com"
+        ],
+        "transport": {
+          "type": "sqs",
+          "queue": "https://sqs.us-east-1.amazonaws.com/172327596604/custodian-mailer-queue"
+        }
+      }
+    ]
+  },
+  "version": "0.9.47",
+  "execution": {
+    "id": "f66b0746-75ca-4880-85c3-6b2cd6763f05",
+    "start": 1761553551.7392337,
+    "end_time": 1761553552.896753,
+    "duration": 1.1575193405151367
+  },
+  "config": {
+    "region": "us-east-1",
+    "regions": [],
+    "cache": "C:\\Users\\ysrin/.cache/c7n-org\\172327596604-us-east-1.cache",
+    "profile": null,
+    "account_id": "172327596604",
+    "assume_role": "arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole",
+    "session_policy": null,
+    "external_id": null,
+    "log_group": null,
+    "tracer": "default",
+    "metrics_enabled": false,
+    "metrics": null,
+    "output_dir": "output_local\\engg\\us-east-1",
+    "cache_period": 15,
+    "dryrun": true,
+    "authorization_file": null
+  },
+  "sys-stats": {},
+  "api-stats": {
+    "access-analyzer.ListAnalyzers": 1
+  },
+  "metrics": [
+    {
+      "MetricName": "ResourceCount",
+      "Timestamp": "2025-10-27T13:55:52.895353",
+      "Value": 0,
+      "Unit": "Count"
+    },
+    {
+      "MetricName": "ResourceTime",
+      "Timestamp": "2025-10-27T13:55:52.895353",
+      "Value": 1.1561193466186523,
+      "Unit": "Seconds"
+    }
+  ]
+}

@@ -1,0 +1,90 @@
+{
+  "policy": {
+    "name": "aws-ec2-stop-public-instances",
+    "resource": "aws.ec2",
+    "description": "Notifies of and stops EC2 instances launched in a public subnet\n",
+    "mode": {
+      "type": "cloudtrail",
+      "events": [
+        "RunInstances"
+      ],
+      "role": "arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole",
+      "tags": {
+        "contact": "ysrinu95@gmail.com",
+        "environment": "engg",
+        "repo": "devops/cloud-custodian/c7n"
+      }
+    },
+    "filters": [
+      {
+        "type": "event",
+        "key": "detail.requestParameters.networkInterfaceSet.items[].associatePublicIpAddress",
+        "value": true
+      }
+    ],
+    "actions": [
+      {
+        "type": "stop",
+        "force": true
+      },
+      {
+        "template": "aws-basic_email.html",
+        "to": [
+          "ysrinu95@gmail.com",
+          "event-owner",
+          "resource-owner"
+        ],
+        "transport": {
+          "type": "sqs",
+          "queue": "https://sqs.us-east-1.amazonaws.com/172327596604/custodian-mailer-queue"
+        },
+        "type": "notify",
+        "priority_header": 1,
+        "subject": "[c7n] [{{ account }}] Public EC2 Instance Launched ({{ region }})",
+        "violation_desc": "EC2 instance launched in a public subnet",
+        "action_desc": "Actions taken: The violating EC2 instance has been stopped. <br>\nTo expose an application or service publicly, a load balancer should be placed\nin a public subnet which routes the traffic internally. <br>          \n<a href=\"https://docs.aws.amazon.com/securityhub/latest/userguide/securityhub-standards-fsbp-controls.html#ec2-9-remediation\">Documentation</a> \n"
+      }
+    ]
+  },
+  "version": "0.9.47",
+  "execution": {
+    "id": "c93d2964-707c-4703-8cf4-187287581579",
+    "start": 1761553568.9915679,
+    "end_time": 1761553568.9942155,
+    "duration": 0.0026476383209228516
+  },
+  "config": {
+    "region": "us-east-1",
+    "regions": [],
+    "cache": "C:\\Users\\ysrin/.cache/c7n-org\\172327596604-us-east-1.cache",
+    "profile": null,
+    "account_id": "172327596604",
+    "assume_role": "arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole",
+    "session_policy": null,
+    "external_id": null,
+    "log_group": null,
+    "tracer": "default",
+    "metrics_enabled": false,
+    "metrics": null,
+    "output_dir": "output_local\\engg\\us-east-1",
+    "cache_period": 15,
+    "dryrun": true,
+    "authorization_file": null
+  },
+  "sys-stats": {},
+  "api-stats": {},
+  "metrics": [
+    {
+      "MetricName": "ResourceCount",
+      "Timestamp": "2025-10-27T13:56:08.993583",
+      "Value": 0,
+      "Unit": "Count"
+    },
+    {
+      "MetricName": "ResourceTime",
+      "Timestamp": "2025-10-27T13:56:08.993583",
+      "Value": 0.002015352249145508,
+      "Unit": "Seconds"
+    }
+  ]
+}

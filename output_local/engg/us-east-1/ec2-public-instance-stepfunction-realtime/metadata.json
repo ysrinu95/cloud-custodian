@@ -1,0 +1,148 @@
+{
+  "policy": {
+    "name": "ec2-public-instance-stepfunction-realtime",
+    "description": "Real-time detection of EC2 instances launched with public IP addresses.\nImmediately triggers Step Function workflow for automated risk assessment \nand remediation based on risk level (HIGH/MEDIUM/LOW).\n",
+    "resource": "aws.ec2",
+    "mode": {
+      "type": "cloudtrail",
+      "events": [
+        {
+          "source": "ec2.amazonaws.com",
+          "event": "RunInstances",
+          "ids": "responseElements.instancesSet.items[].instanceId"
+        },
+        {
+          "source": "ec2.amazonaws.com",
+          "event": "AssociateAddress",
+          "ids": "requestParameters.instanceId"
+        },
+        {
+          "source": "ec2.amazonaws.com",
+          "event": "ModifyInstanceAttribute",
+          "ids": "requestParameters.instanceId"
+        }
+      ],
+      "role": "arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole",
+      "timeout": 300,
+      "tags": {
+        "contact": "srinivasula.yallala@optum.com",
+        "repo": "aikyam-everything-as-code",
+        "terraform": "True",
+        "oid-owned": "True",
+        "aide-id": "UHGWM110-019726",
+        "service-tier": "p1",
+        "application": "cloud-custodian",
+        "managed-by": "jenkins",
+        "environment": "engg",
+        "component": "cloud-custodian-policy",
+        "policy-type": "security-findings",
+        "security-service": "ec2-public-detection"
+      }
+    },
+    "filters": [
+      {
+        "type": "value",
+        "key": "State.Name",
+        "value": "running"
+      },
+      {
+        "or": [
+          {
+            "type": "value",
+            "key": "PublicIpAddress",
+            "value": "not-null"
+          },
+          {
+            "type": "value",
+            "key": "NetworkInterfaces[].Association.PublicIp",
+            "value": "not-null"
+          }
+        ]
+      },
+      {
+        "type": "value",
+        "key": "Tags[?Key == 'PublicInstanceApproved'] | length(@)",
+        "value": 0
+      }
+    ],
+    "actions": [
+      {
+        "type": "invoke-sfn",
+        "state-machine": "arn:aws:states:us-east-1:{account}:stateMachine:EC2PublicInstanceRemediation"
+      },
+      {
+        "type": "tag",
+        "key": "SecurityFinding",
+        "value": "PublicInstanceDetected"
+      },
+      {
+        "type": "tag",
+        "key": "DetectionSource",
+        "value": "CloudCustodian-RealTime"
+      },
+      {
+        "type": "tag",
+        "key": "DetectionTime",
+        "value": "{now:%Y-%m-%d %H:%M:%S UTC}"
+      },
+      {
+        "type": "notify",
+        "template": "aws-basic_email",
+        "priority_header": "1",
+        "violation_desc": "Public EC2 Instance Detected - Step Function Triggered",
+        "action_desc": "\u00f0\u0178\u0161\u00a8 SECURITY ALERT: Public EC2 Instance Detected\n\nInstance: {InstanceId}\nPublic IP: {PublicIpAddress}\nInstance Type: {InstanceType}\nLaunch Time: {LaunchTime}\nVPC: {VpcId}\nSubnet: {SubnetId}\n\n\u00e2\u0161\u00a1 Step Function workflow has been automatically triggered for:\n\u00e2\u20ac\u00a2 Risk assessment and categorization\n\u00e2\u20ac\u00a2 Automated remediation based on risk level\n\u00e2\u20ac\u00a2 Security team notification\n\u00e2\u20ac\u00a2 Compliance tracking\n\n\u00f0\u0178\u201d\u2014 Monitor workflow: https://{region}.console.aws.amazon.com/states/home?region={region}#/executions\n",
+        "to": [
+          "security-team@optum.com",
+          "infrastructure-team@optum.com"
+        ],
+        "transport": {
+          "type": "sqs",
+          "queue": "https://sqs.us-east-1.amazonaws.com/172327596604/custodian-mailer-queue"
+        }
+      }
+    ]
+  },
+  "version": "0.9.47",
+  "execution": {
+    "id": "03488285-47c6-449c-8ca2-d88ec44f5638",
+    "start": 1761553554.3759127,
+    "end_time": 1761553556.228737,
+    "duration": 1.8528244495391846
+  },
+  "config": {
+    "region": "us-east-1",
+    "regions": [],
+    "cache": "C:\\Users\\ysrin/.cache/c7n-org\\172327596604-us-east-1.cache",
+    "profile": null,
+    "account_id": "172327596604",
+    "assume_role": "arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole",
+    "session_policy": null,
+    "external_id": null,
+    "log_group": null,
+    "tracer": "default",
+    "metrics_enabled": false,
+    "metrics": null,
+    "output_dir": "output_local\\engg\\us-east-1",
+    "cache_period": 15,
+    "dryrun": true,
+    "authorization_file": null
+  },
+  "sys-stats": {},
+  "api-stats": {
+    "ec2.DescribeInstances": 1
+  },
+  "metrics": [
+    {
+      "MetricName": "ResourceCount",
+      "Timestamp": "2025-10-27T13:55:56.228737",
+      "Value": 0,
+      "Unit": "Count"
+    },
+    {
+      "MetricName": "ResourceTime",
+      "Timestamp": "2025-10-27T13:55:56.228737",
+      "Value": 1.8515915870666504,
+      "Unit": "Seconds"
+    }
+  ]
+}

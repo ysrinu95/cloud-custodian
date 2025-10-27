@@ -1,0 +1,99 @@
+{
+  "policy": {
+    "name": "aws-cloudwatch-stale-log-groups",
+    "resource": "aws.log-group",
+    "description": "Notifies of CloudWatch log groups found to be unused\n",
+    "mode": {
+      "type": "periodic",
+      "schedule": "cron(0, 23, ?, *, SUN, *)",
+      "role": "arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole",
+      "tags": {
+        "contact": "ysrinu95@gmail.com",
+        "environment": "engg",
+        "repo": "devops/cloud-custodian/c7n"
+      }
+    },
+    "filters": [
+      {
+        "type": "last-write",
+        "days": 365
+      },
+      {
+        "not": [
+          {
+            "type": "value",
+            "key": "logGroupName",
+            "op": "regex",
+            "value": "^/aws/lambda/custodian-"
+          }
+        ]
+      },
+      {
+        "tag:c7n-exception:unused": "absent"
+      }
+    ],
+    "actions": [
+      {
+        "template": "aws-basic_email.html",
+        "to": [
+          "ysrinu95@gmail.com",
+          "event-owner",
+          "resource-owner"
+        ],
+        "transport": {
+          "type": "sqs",
+          "queue": "https://sqs.us-east-1.amazonaws.com/172327596604/custodian-mailer-queue"
+        },
+        "type": "notify",
+        "subject": "[c7n] [{{ account }}] CloudWatch Log Groups Are Unused ({{ region }})",
+        "violation_desc": "CloudWatch log groups not written to in the last year",
+        "action_desc": "Please check the unused log groups and delete if unused\n"
+      }
+    ]
+  },
+  "version": "0.9.47",
+  "execution": {
+    "id": "36ae027d-0427-4d42-b52c-bb9c980ad558",
+    "start": 1761553523.662591,
+    "end_time": 1761553530.118489,
+    "duration": 6.45589804649353
+  },
+  "config": {
+    "region": "us-east-1",
+    "regions": [],
+    "cache": "C:\\Users\\ysrin/.cache/c7n-org\\172327596604-us-east-1.cache",
+    "profile": null,
+    "account_id": "172327596604",
+    "assume_role": "arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole",
+    "session_policy": null,
+    "external_id": null,
+    "log_group": null,
+    "tracer": "default",
+    "metrics_enabled": false,
+    "metrics": null,
+    "output_dir": "output_local\\engg\\us-east-1",
+    "cache_period": 15,
+    "dryrun": true,
+    "authorization_file": null
+  },
+  "sys-stats": {},
+  "api-stats": {
+    "logs.DescribeLogGroups": 1,
+    "tagging.GetResources": 1,
+    "logs.DescribeLogStreams": 4
+  },
+  "metrics": [
+    {
+      "MetricName": "ResourceCount",
+      "Timestamp": "2025-10-27T13:55:30.114699",
+      "Value": 0,
+      "Unit": "Count"
+    },
+    {
+      "MetricName": "ResourceTime",
+      "Timestamp": "2025-10-27T13:55:30.114699",
+      "Value": 4.9068450927734375,
+      "Unit": "Seconds"
+    }
+  ]
+}

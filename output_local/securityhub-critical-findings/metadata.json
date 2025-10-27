@@ -1,0 +1,145 @@
+{
+  "policy": {
+    "name": "securityhub-critical-findings",
+    "description": "Respond to AWS Security Hub critical and high severity findings from CSPM controls.\nThis includes AWS Foundational Security Best Practices and CIS benchmarks.\n",
+    "resource": "aws.securityhub-finding",
+    "mode": {
+      "type": "cloudtrail",
+      "events": [
+        {
+          "source": "aws.securityhub",
+          "event": "BatchImportFindings",
+          "ids": "detail.findings[].Id"
+        }
+      ],
+      "role": "arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole",
+      "timeout": 300,
+      "tags": {
+        "contact": "srinivasula.yallala@optum.com",
+        "repo": "aikyam-everything-as-code",
+        "terraform": "True",
+        "oid-owned": "True",
+        "aide-id": "UHGWM110-019726",
+        "service-tier": "p1",
+        "application": "cloud-custodian",
+        "managed-by": "jenkins",
+        "environment": "engg",
+        "component": "cloud-custodian-policy",
+        "policy-type": "security-findings",
+        "security-service": "securityhub"
+      }
+    },
+    "filters": [
+      {
+        "type": "value",
+        "key": "Severity.Label",
+        "op": "in",
+        "value": [
+          "CRITICAL",
+          "HIGH"
+        ]
+      },
+      {
+        "type": "value",
+        "key": "RecordState",
+        "value": "ACTIVE"
+      },
+      {
+        "or": [
+          {
+            "type": "value",
+            "key": "ProductFields.StandardsArn",
+            "op": "regex",
+            "value": ".*(aws-foundational-security-best-practices|cis-aws-foundations-benchmark).*"
+          }
+        ]
+      },
+      {
+        "type": "value",
+        "key": "Types[0]",
+        "op": "in",
+        "value": [
+          "Software and Configuration Checks/AWS Security Best Practices",
+          "Effects/Data Exposure",
+          "Unusual Behaviors"
+        ]
+      }
+    ],
+    "actions": [
+      {
+        "type": "post-finding",
+        "compliance_status": "FAILED",
+        "severity_label": "HIGH",
+        "types": [
+          "Software and Configuration Checks/AWS Security Best Practices"
+        ]
+      },
+      {
+        "type": "notify",
+        "template": "aws-basic_email",
+        "priority_header": "1",
+        "violation_desc": "Security Hub Critical Finding Detected",
+        "action_desc": "A critical or high severity Security Hub finding has been detected.\nThis may indicate a security misconfiguration or vulnerability.\n",
+        "to": [
+          "security-team@optum.com"
+        ],
+        "transport": {
+          "type": "sqs",
+          "queue": "https://sqs.us-east-1.amazonaws.com/172327596604/custodian-mailer-queue"
+        }
+      }
+    ]
+  },
+  "version": "0.9.47",
+  "execution": {
+    "id": "841dcd55-953f-4468-8f24-eb31d96db124",
+    "start": 1761553920.6322594,
+    "end_time": 1761553921.7813802,
+    "duration": 1.149120807647705
+  },
+  "config": {
+    "region": "us-west-2",
+    "regions": [
+      "us-west-2"
+    ],
+    "cache": "~/.cache/cloud-custodian.cache",
+    "profile": null,
+    "account_id": "172327596604",
+    "assume_role": null,
+    "session_policy": null,
+    "external_id": null,
+    "log_group": null,
+    "tracer": null,
+    "metrics_enabled": null,
+    "metrics": null,
+    "output_dir": "output_local",
+    "cache_period": 15,
+    "dryrun": true,
+    "authorization_file": null,
+    "subparser": "run",
+    "config": null,
+    "configs": [
+      "c7n\\policies\\security-findings.yml"
+    ],
+    "policy_filters": [],
+    "resource_types": [],
+    "verbose": null,
+    "quiet": null,
+    "debug": false,
+    "skip_validation": false,
+    "command": "c7n.commands.run",
+    "vars": null
+  },
+  "sys-stats": {},
+  "api-stats": {
+    "securityhub.GetFindings": 1
+  },
+  "metrics": [
+    {
+      "MetricName": "PolicyException",
+      "Timestamp": "2025-10-27T14:02:01.781380",
+      "Value": 1,
+      "Unit": "Count"
+    }
+  ]
+}

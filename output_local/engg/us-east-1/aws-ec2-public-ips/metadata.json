@@ -1,0 +1,83 @@
+{
+  "policy": {
+    "name": "aws-ec2-public-ips",
+    "resource": "aws.ec2",
+    "description": "Notifies of instances found with a public IP address\n",
+    "mode": {
+      "type": "periodic",
+      "schedule": "cron(0, 23, ?, *, SUN, *)",
+      "role": "arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole",
+      "tags": {
+        "contact": "ysrinu95@gmail.com",
+        "environment": "engg",
+        "repo": "devops/cloud-custodian/c7n"
+      }
+    },
+    "filters": [
+      {
+        "type": "value",
+        "key": "PublicIpAddress",
+        "value": "present"
+      }
+    ],
+    "actions": [
+      {
+        "template": "aws-basic_email.html",
+        "to": [
+          "ysrinu95@gmail.com",
+          "event-owner",
+          "resource-owner"
+        ],
+        "transport": {
+          "type": "sqs",
+          "queue": "https://sqs.us-east-1.amazonaws.com/172327596604/custodian-mailer-queue"
+        },
+        "type": "notify",
+        "subject": "[c7n] [{{ account }}] EC2 Instances With Public IP Report ({{ region }})",
+        "violation_desc": "EC2 instances with a public IP address",
+        "action_desc": "No action taken. EC2 instances should be on private subnets.\n"
+      }
+    ]
+  },
+  "version": "0.9.47",
+  "execution": {
+    "id": "3d347448-835c-4399-8081-3783263fbaf6",
+    "start": 1761553567.0117283,
+    "end_time": 1761553568.9786265,
+    "duration": 1.9668982028961182
+  },
+  "config": {
+    "region": "us-east-1",
+    "regions": [],
+    "cache": "C:\\Users\\ysrin/.cache/c7n-org\\172327596604-us-east-1.cache",
+    "profile": null,
+    "account_id": "172327596604",
+    "assume_role": "arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole",
+    "session_policy": null,
+    "external_id": null,
+    "log_group": null,
+    "tracer": "default",
+    "metrics_enabled": false,
+    "metrics": null,
+    "output_dir": "output_local\\engg\\us-east-1",
+    "cache_period": 15,
+    "dryrun": true,
+    "authorization_file": null
+  },
+  "sys-stats": {},
+  "api-stats": {},
+  "metrics": [
+    {
+      "MetricName": "ResourceCount",
+      "Timestamp": "2025-10-27T13:56:08.978626",
+      "Value": 0,
+      "Unit": "Count"
+    },
+    {
+      "MetricName": "ResourceTime",
+      "Timestamp": "2025-10-27T13:56:08.978626",
+      "Value": 0.0,
+      "Unit": "Seconds"
+    }
+  ]
+}

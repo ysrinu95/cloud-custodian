@@ -1,0 +1,2 @@
+2025-10-27 14:01:50,571 - custodian.policy - INFO - policy:aws-rds-snapshot-old resource:rds-snapshot region:us-west-2 count:0 time:1.63
+2025-10-27 14:03:50,191 - custodian.policy - INFO - policy:aws-rds-snapshot-old resource:rds-snapshot region:us-east-1 count:0 time:1.76

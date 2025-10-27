@@ -1,0 +1,98 @@
+{
+  "policy": {
+    "name": "aws-lambda-outdated-runtime-creation",
+    "resource": "aws.lambda",
+    "description": "Notify when a Lambda function is created with an outdated runtime.\n",
+    "mode": {
+      "type": "cloudtrail",
+      "role": "arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole",
+      "events": [
+        "CreateFunction"
+      ]
+    },
+    "filters": [
+      {
+        "type": "value",
+        "key": "Runtime",
+        "value": [
+          "nodejs18.x"
+        ],
+        "op": "in"
+      }
+    ],
+    "actions": [
+      {
+        "template": "aws-basic_email.html",
+        "to": [
+          "ysrinu95@gmail.com",
+          "event-owner",
+          "resource-owner"
+        ],
+        "transport": {
+          "type": "sqs",
+          "queue": "https://sqs.us-east-1.amazonaws.com/172327596604/custodian-mailer-queue"
+        },
+        "type": "notify",
+        "subject": "[c7n] [{{ account }}] Lambda Function Created with Outdated Runtime ({{ region }})",
+        "violation_desc": "Lambda function Created with outdated runtime",
+        "action_desc": "Functions should be created using a runtime that is not pending deprecation.<br>\nThese runtimes will soon no longer receive security patches.<br>\n<a href=\"https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html\">Documentation</a>\n"
+      }
+    ]
+  },
+  "version": "0.9.47",
+  "execution": {
+    "id": "51b51677-2f4a-4726-90c6-bb09722b73fa",
+    "start": 1761554023.9971025,
+    "end_time": 1761554023.9981298,
+    "duration": 0.0010273456573486328
+  },
+  "config": {
+    "region": "us-east-1",
+    "regions": [
+      "us-east-1"
+    ],
+    "cache": "~/.cache/cloud-custodian.cache",
+    "profile": null,
+    "account_id": "172327596604",
+    "assume_role": null,
+    "session_policy": null,
+    "external_id": null,
+    "log_group": null,
+    "tracer": null,
+    "metrics_enabled": null,
+    "metrics": null,
+    "output_dir": "output_local",
+    "cache_period": 15,
+    "dryrun": true,
+    "authorization_file": null,
+    "subparser": "run",
+    "config": null,
+    "configs": [
+      "c7n\\policies\\lambda.yml"
+    ],
+    "policy_filters": [],
+    "resource_types": [],
+    "verbose": null,
+    "quiet": null,
+    "debug": false,
+    "skip_validation": false,
+    "command": "c7n.commands.run",
+    "vars": null
+  },
+  "sys-stats": {},
+  "api-stats": {},
+  "metrics": [
+    {
+      "MetricName": "ResourceCount",
+      "Timestamp": "2025-10-27T14:03:43.998130",
+      "Value": 0,
+      "Unit": "Count"
+    },
+    {
+      "MetricName": "ResourceTime",
+      "Timestamp": "2025-10-27T14:03:43.998130",
+      "Value": 0.0010273456573486328,
+      "Unit": "Seconds"
+    }
+  ]
+}

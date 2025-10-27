@@ -1,0 +1,88 @@
+{
+  "policy": {
+    "name": "ec2-public-instances-stepfunction-remediation",
+    "description": "Detect public EC2 instances and invoke Step Function for automated remediation workflow.\nThis policy triggers a Step Function that handles notification, tagging, and remediation\nof publicly accessible EC2 instances.\n",
+    "resource": "aws.ec2",
+    "mode": {
+      "type": "cloudtrail",
+      "events": [
+        "RunInstances"
+      ],
+      "role": "arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole"
+    },
+    "filters": [
+      {
+        "type": "value",
+        "key": "State.Name",
+        "value": "running"
+      },
+      {
+        "type": "value",
+        "key": "PublicIpAddress",
+        "value": "not-null"
+      }
+    ],
+    "actions": [
+      {
+        "type": "invoke-sfn",
+        "state-machine": "arn:aws:states:us-east-1:172327596604:stateMachine:EC2PublicInstanceRemediation"
+      }
+    ]
+  },
+  "version": "0.9.47",
+  "execution": {
+    "id": "192b7cc0-4205-40b3-944e-54f20cd9448a",
+    "start": 1761554052.4275427,
+    "end_time": 1761554052.4356875,
+    "duration": 0.008144855499267578
+  },
+  "config": {
+    "region": "us-east-1",
+    "regions": [
+      "us-east-1"
+    ],
+    "cache": "~/.cache/cloud-custodian.cache",
+    "profile": null,
+    "account_id": "172327596604",
+    "assume_role": null,
+    "session_policy": null,
+    "external_id": null,
+    "log_group": null,
+    "tracer": null,
+    "metrics_enabled": null,
+    "metrics": null,
+    "output_dir": "output_local",
+    "cache_period": 15,
+    "dryrun": true,
+    "authorization_file": null,
+    "subparser": "run",
+    "config": null,
+    "configs": [
+      "c7n\\policies\\ec2-public-stepfunction.yml"
+    ],
+    "policy_filters": [],
+    "resource_types": [],
+    "verbose": null,
+    "quiet": null,
+    "debug": false,
+    "skip_validation": false,
+    "command": "c7n.commands.run",
+    "vars": null
+  },
+  "sys-stats": {},
+  "api-stats": {},
+  "metrics": [
+    {
+      "MetricName": "ResourceCount",
+      "Timestamp": "2025-10-27T14:04:12.435687",
+      "Value": 0,
+      "Unit": "Count"
+    },
+    {
+      "MetricName": "ResourceTime",
+      "Timestamp": "2025-10-27T14:04:12.435687",
+      "Value": 0.0,
+      "Unit": "Seconds"
+    }
+  ]
+}

@@ -1,0 +1,103 @@
+{
+  "policy": {
+    "name": "aws-s3-public-access",
+    "conditions": [
+      {
+        "region": "us-east-1"
+      }
+    ],
+    "resource": "aws.s3",
+    "description": "Notifies of S3 buckets that do not have public access fully restricted\n",
+    "mode": {
+      "type": "periodic",
+      "schedule": "cron(0, 23, ?, *, SUN, *)",
+      "role": "arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole",
+      "tags": {
+        "contact": "ysrinu95@gmail.com",
+        "environment": "{environment}",
+        "repo": "devops/cloud-custodian/c7n"
+      }
+    },
+    "filters": [
+      {
+        "type": "check-public-block"
+      }
+    ],
+    "actions": [
+      {
+        "template": "aws-basic_email.html",
+        "to": [
+          "ysrinu95@gmail.com",
+          "event-owner",
+          "resource-owner"
+        ],
+        "transport": {
+          "type": "sqs",
+          "queue": "https://sqs.us-east-1.amazonaws.com/172327596604/custodian-mailer-queue"
+        },
+        "type": "notify",
+        "subject": "[c7n] [{{ account }}] S3 Buckets Potential Public Access Report ({{ region }})",
+        "violation_desc": "S3 buckets with potential public access",
+        "action_desc": "No action taken. S3 bucket public access should be fully restricted.<br>\n<a href=\"https://docs.aws.amazon.com/AmazonS3/latest/userguide/access-control-block-public-access.html\">Documentation</a>\n"
+      }
+    ]
+  },
+  "version": "0.9.47",
+  "execution": {
+    "id": "d3478b4b-ba55-4164-84ff-033dd11a0a9e",
+    "start": 1761554044.935688,
+    "end_time": 1761554049.69823,
+    "duration": 4.762542009353638
+  },
+  "config": {
+    "region": "us-east-1",
+    "regions": [
+      "us-east-1"
+    ],
+    "cache": "~/.cache/cloud-custodian.cache",
+    "profile": null,
+    "account_id": "172327596604",
+    "assume_role": null,
+    "session_policy": null,
+    "external_id": null,
+    "log_group": null,
+    "tracer": null,
+    "metrics_enabled": null,
+    "metrics": null,
+    "output_dir": "output_local",
+    "cache_period": 15,
+    "dryrun": true,
+    "authorization_file": null,
+    "subparser": "run",
+    "config": null,
+    "configs": [
+      "c7n\\policies\\s3.yml"
+    ],
+    "policy_filters": [],
+    "resource_types": [],
+    "verbose": null,
+    "quiet": null,
+    "debug": false,
+    "skip_validation": false,
+    "command": "c7n.commands.run",
+    "vars": null
+  },
+  "sys-stats": {},
+  "api-stats": {
+    "s3.GetPublicAccessBlock": 4
+  },
+  "metrics": [
+    {
+      "MetricName": "ResourceCount",
+      "Timestamp": "2025-10-27T14:04:09.698230",
+      "Value": 0,
+      "Unit": "Count"
+    },
+    {
+      "MetricName": "ResourceTime",
+      "Timestamp": "2025-10-27T14:04:09.698230",
+      "Value": 4.760246276855469,
+      "Unit": "Seconds"
+    }
+  ]
+}

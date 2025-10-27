@@ -1,0 +1,2 @@
+2025-10-27 14:01:48,938 - custodian.policy - INFO - policy:aws-rds-engine-version-upgrade-available resource:aws.rds region:us-west-2 count:0 time:0.00
+2025-10-27 14:03:48,431 - custodian.policy - INFO - policy:aws-rds-engine-version-upgrade-available resource:aws.rds region:us-east-1 count:0 time:0.00

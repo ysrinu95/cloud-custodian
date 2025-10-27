@@ -1,0 +1,119 @@
+{
+  "policy": {
+    "name": "ec2-public-instance-stepfunction-periodic",
+    "description": "Periodic scan for existing EC2 instances with public IP addresses.\nRuns hourly to catch instances that may have been missed by real-time detection\nor had their networking configuration changed after launch.\n",
+    "resource": "aws.ec2",
+    "mode": {
+      "type": "periodic",
+      "schedule": "rate(1 hour)",
+      "role": "arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole",
+      "tags": {
+        "contact": "srinivasula.yallala@optum.com",
+        "repo": "aikyam-everything-as-code",
+        "terraform": "True",
+        "oid-owned": "True",
+        "aide-id": "UHGWM110-019726",
+        "service-tier": "p1",
+        "application": "cloud-custodian",
+        "managed-by": "jenkins",
+        "environment": "engg",
+        "component": "cloud-custodian-policy",
+        "policy-type": "security-findings",
+        "security-service": "ec2-public-detection"
+      }
+    },
+    "filters": [
+      {
+        "type": "value",
+        "key": "State.Name",
+        "value": "running"
+      },
+      {
+        "or": [
+          {
+            "type": "value",
+            "key": "PublicIpAddress",
+            "value": "not-null"
+          },
+          {
+            "type": "value",
+            "key": "NetworkInterfaces[].Association.PublicIp",
+            "value": "not-null"
+          }
+        ]
+      },
+      {
+        "type": "value",
+        "key": "Tags[?Key == 'PublicInstanceApproved'] | length(@)",
+        "value": 0
+      },
+      {
+        "type": "value",
+        "key": "Tags[?Key == 'SecurityFinding'] | length(@)",
+        "value": 0
+      }
+    ],
+    "actions": [
+      {
+        "type": "invoke-sfn",
+        "state-machine": "arn:aws:states:us-east-1:{account}:stateMachine:EC2PublicInstanceRemediation"
+      },
+      {
+        "type": "tag",
+        "key": "SecurityFinding",
+        "value": "PublicInstanceDetected"
+      },
+      {
+        "type": "tag",
+        "key": "DetectionSource",
+        "value": "CloudCustodian-Periodic"
+      },
+      {
+        "type": "tag",
+        "key": "DetectionTime",
+        "value": "{now:%Y-%m-%d %H:%M:%S UTC}"
+      }
+    ]
+  },
+  "version": "0.9.47",
+  "execution": {
+    "id": "fd3f57c1-45b5-44f1-97a7-a90de07d050b",
+    "start": 1761553556.2445478,
+    "end_time": 1761553556.2445478,
+    "duration": 0.0
+  },
+  "config": {
+    "region": "us-east-1",
+    "regions": [],
+    "cache": "C:\\Users\\ysrin/.cache/c7n-org\\172327596604-us-east-1.cache",
+    "profile": null,
+    "account_id": "172327596604",
+    "assume_role": "arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole",
+    "session_policy": null,
+    "external_id": null,
+    "log_group": null,
+    "tracer": "default",
+    "metrics_enabled": false,
+    "metrics": null,
+    "output_dir": "output_local\\engg\\us-east-1",
+    "cache_period": 15,
+    "dryrun": true,
+    "authorization_file": null
+  },
+  "sys-stats": {},
+  "api-stats": {},
+  "metrics": [
+    {
+      "MetricName": "ResourceCount",
+      "Timestamp": "2025-10-27T13:55:56.244547",
+      "Value": 0,
+      "Unit": "Count"
+    },
+    {
+      "MetricName": "ResourceTime",
+      "Timestamp": "2025-10-27T13:55:56.244547",
+      "Value": 0.0,
+      "Unit": "Seconds"
+    }
+  ]
+}

@@ -1,0 +1,105 @@
+{
+  "policy": {
+    "name": "security-findings-daily-summary",
+    "description": "Daily summary of all security findings from various AWS security services.\nThis provides a consolidated view of the security posture.\n",
+    "resource": "aws.account",
+    "mode": {
+      "type": "periodic",
+      "schedule": "cron(0 23 ? * SUN *)",
+      "role": "arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole",
+      "tags": {
+        "contact": "srinivasula.yallala@optum.com",
+        "repo": "aikyam-everything-as-code",
+        "terraform": "True",
+        "oid-owned": "True",
+        "aide-id": "UHGWM110-019726",
+        "service-tier": "p1",
+        "application": "cloud-custodian",
+        "managed-by": "jenkins",
+        "environment": "engg",
+        "component": "cloud-custodian-policy",
+        "policy-type": "security-findings",
+        "security-service": "summary"
+      }
+    },
+    "actions": [
+      {
+        "type": "invoke-lambda",
+        "function": "custodian-security-findings-aggregator",
+        "async": false
+      },
+      {
+        "type": "notify",
+        "template": "aws-basic_email",
+        "priority_header": "3",
+        "subject": "Daily Security Findings Summary - {account}",
+        "violation_desc": "Daily Security Findings Report",
+        "action_desc": "This is your daily summary of security findings from:\n- AWS GuardDuty\n- AWS Config Rules\n- AWS Security Hub\n- AWS Macie\n- IAM Access Analyzer\n- S3 Access Logs Analysis\n- CloudTrail Security Events\n- EC2 Public Instance Detection\n\nReview the findings and take appropriate action.\n",
+        "to": [
+          "security-team@optum.com",
+          "compliance-team@optum.com"
+        ],
+        "transport": {
+          "type": "sqs",
+          "queue": "https://sqs.us-east-1.amazonaws.com/172327596604/custodian-mailer-queue"
+        }
+      }
+    ]
+  },
+  "version": "0.9.47",
+  "execution": {
+    "id": "b29e72aa-d0b8-4a2a-9624-e7560119b1e9",
+    "start": 1761553931.212397,
+    "end_time": 1761553931.2145472,
+    "duration": 0.0021500587463378906
+  },
+  "config": {
+    "region": "us-west-2",
+    "regions": [
+      "us-west-2"
+    ],
+    "cache": "~/.cache/cloud-custodian.cache",
+    "profile": null,
+    "account_id": "172327596604",
+    "assume_role": null,
+    "session_policy": null,
+    "external_id": null,
+    "log_group": null,
+    "tracer": null,
+    "metrics_enabled": null,
+    "metrics": null,
+    "output_dir": "output_local",
+    "cache_period": 15,
+    "dryrun": true,
+    "authorization_file": null,
+    "subparser": "run",
+    "config": null,
+    "configs": [
+      "c7n\\policies\\security-findings.yml"
+    ],
+    "policy_filters": [],
+    "resource_types": [],
+    "verbose": null,
+    "quiet": null,
+    "debug": false,
+    "skip_validation": false,
+    "command": "c7n.commands.run",
+    "vars": null
+  },
+  "sys-stats": {},
+  "api-stats": {},
+  "metrics": [
+    {
+      "MetricName": "ResourceCount",
+      "Timestamp": "2025-10-27T14:02:11.214547",
+      "Value": 1,
+      "Unit": "Count"
+    },
+    {
+      "MetricName": "ResourceTime",
+      "Timestamp": "2025-10-27T14:02:11.214547",
+      "Value": 0.0017731189727783203,
+      "Unit": "Seconds"
+    }
+  ]
+}

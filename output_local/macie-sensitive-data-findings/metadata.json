@@ -1,0 +1,146 @@
+{
+  "policy": {
+    "name": "macie-sensitive-data-findings",
+    "description": "Respond to AWS Macie sensitive data discovery findings in S3 buckets.\nThis policy triggers when Macie detects PII, credentials, or sensitive data.\n",
+    "resource": "aws.s3",
+    "mode": {
+      "type": "cloudtrail",
+      "events": [
+        {
+          "source": "macie2.amazonaws.com",
+          "event": "ClassificationResult",
+          "ids": "detail.resourcesAffected.s3Bucket.name"
+        }
+      ],
+      "role": "arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole",
+      "timeout": 300,
+      "tags": {
+        "contact": "srinivasula.yallala@optum.com",
+        "repo": "aikyam-everything-as-code",
+        "terraform": "True",
+        "oid-owned": "True",
+        "aide-id": "UHGWM110-019726",
+        "service-tier": "p1",
+        "application": "cloud-custodian",
+        "managed-by": "jenkins",
+        "environment": "engg",
+        "component": "cloud-custodian-policy",
+        "policy-type": "security-findings",
+        "security-service": "macie"
+      }
+    },
+    "filters": [
+      {
+        "type": "event",
+        "key": "detail.severity.score",
+        "op": "gte",
+        "value": 7
+      }
+    ],
+    "actions": [
+      {
+        "type": "set-bucket-encryption",
+        "crypto": "AES256"
+      },
+      {
+        "type": "toggle-versioning",
+        "enabled": true
+      },
+      {
+        "type": "set-public-block",
+        "BlockPublicAcls": true,
+        "BlockPublicPolicy": true,
+        "IgnorePublicAcls": true,
+        "RestrictPublicBuckets": true
+      },
+      {
+        "type": "tag",
+        "key": "MacieFinding",
+        "value": "SensitiveDataDetected"
+      },
+      {
+        "type": "notify",
+        "template": "aws-basic_email",
+        "priority_header": "1",
+        "violation_desc": "Macie Sensitive Data Finding",
+        "action_desc": "AWS Macie has detected sensitive data (PII, credentials, financial info) in an S3 bucket.\nAutomatic remediation applied: encryption enabled, versioning enabled, public access blocked.\n",
+        "to": [
+          "data-security-team@optum.com",
+          "compliance-team@optum.com"
+        ],
+        "transport": {
+          "type": "sqs",
+          "queue": "https://sqs.us-east-1.amazonaws.com/172327596604/custodian-mailer-queue"
+        }
+      }
+    ]
+  },
+  "version": "0.9.47",
+  "execution": {
+    "id": "55221e9a-1a62-4b05-acb2-d7859f619568",
+    "start": 1761553921.8921633,
+    "end_time": 1761553928.4221592,
+    "duration": 6.529995918273926
+  },
+  "config": {
+    "region": "us-west-2",
+    "regions": [
+      "us-west-2"
+    ],
+    "cache": "~/.cache/cloud-custodian.cache",
+    "profile": null,
+    "account_id": "172327596604",
+    "assume_role": null,
+    "session_policy": null,
+    "external_id": null,
+    "log_group": null,
+    "tracer": null,
+    "metrics_enabled": null,
+    "metrics": null,
+    "output_dir": "output_local",
+    "cache_period": 15,
+    "dryrun": true,
+    "authorization_file": null,
+    "subparser": "run",
+    "config": null,
+    "configs": [
+      "c7n\\policies\\security-findings.yml"
+    ],
+    "policy_filters": [],
+    "resource_types": [],
+    "verbose": null,
+    "quiet": null,
+    "debug": false,
+    "skip_validation": false,
+    "command": "c7n.commands.run",
+    "vars": null
+  },
+  "sys-stats": {},
+  "api-stats": {
+    "s3.ListBuckets": 1,
+    "s3.GetBucketLocation": 4,
+    "s3.GetBucketTagging": 4,
+    "s3.GetBucketPolicy": 4,
+    "s3.GetBucketAcl": 4,
+    "s3.GetBucketReplication": 4,
+    "s3.GetBucketVersioning": 4,
+    "s3.GetBucketWebsite": 4,
+    "s3.GetBucketLogging": 4,
+    "s3.GetBucketNotificationConfiguration": 4,
+    "s3.GetBucketLifecycleConfiguration": 4
+  },
+  "metrics": [
+    {
+      "MetricName": "ResourceCount",
+      "Timestamp": "2025-10-27T14:02:08.411245",
+      "Value": 4,
+      "Unit": "Count"
+    },
+    {
+      "MetricName": "ResourceTime",
+      "Timestamp": "2025-10-27T14:02:08.411245",
+      "Value": 6.519082546234131,
+      "Unit": "Seconds"
+    }
+  ]
+}

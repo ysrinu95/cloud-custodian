@@ -1,0 +1,133 @@
+{
+  "policy": {
+    "name": "s3-access-logs-suspicious-activity",
+    "description": "Monitor S3 access logs for suspicious activity patterns.\nThis policy analyzes S3 access logs and triggers on anomalous access patterns.\n",
+    "resource": "aws.s3",
+    "mode": {
+      "type": "cloudtrail",
+      "events": [
+        {
+          "source": "s3.amazonaws.com",
+          "event": "GetObject",
+          "ids": "requestParameters.bucketName"
+        },
+        {
+          "source": "s3.amazonaws.com",
+          "event": "DeleteObject",
+          "ids": "requestParameters.bucketName"
+        },
+        {
+          "source": "s3.amazonaws.com",
+          "event": "PutBucketPolicy",
+          "ids": "requestParameters.bucketName"
+        }
+      ],
+      "role": "arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole",
+      "timeout": 300,
+      "tags": {
+        "contact": "srinivasula.yallala@optum.com",
+        "repo": "aikyam-everything-as-code",
+        "terraform": "True",
+        "oid-owned": "True",
+        "aide-id": "UHGWM110-019726",
+        "service-tier": "p1",
+        "application": "cloud-custodian",
+        "managed-by": "jenkins",
+        "environment": "engg",
+        "component": "cloud-custodian-policy",
+        "policy-type": "security-findings",
+        "security-service": "s3-access-logs"
+      }
+    },
+    "filters": [
+      {
+        "type": "bucket-logging",
+        "op": "enabled"
+      },
+      {
+        "type": "event",
+        "key": "detail.requestParameters.key",
+        "op": "regex",
+        "value": ".*(password|secret|credential|key|token|private).*"
+      },
+      {
+        "or": [
+          {
+            "type": "event",
+            "key": "detail.sourceIPAddress",
+            "op": "not-in",
+            "value_from": {
+              "url": "s3://your-config-bucket/trusted-ips.txt"
+            }
+          }
+        ]
+      }
+    ],
+    "actions": [
+      {
+        "type": "tag",
+        "key": "SuspiciousAccess",
+        "value": "Detected-{now:%Y-%m-%d}"
+      },
+      {
+        "type": "toggle-versioning",
+        "enabled": true
+      },
+      {
+        "type": "notify",
+        "template": "aws-basic_email",
+        "priority_header": "2",
+        "violation_desc": "Suspicious S3 Access Pattern Detected",
+        "action_desc": "Suspicious access patterns detected in S3 access logs.\nThis may indicate unauthorized access or data exfiltration attempts.\n",
+        "to": [
+          "security-operations@optum.com"
+        ],
+        "transport": {
+          "type": "sqs",
+          "queue": "https://sqs.us-east-1.amazonaws.com/172327596604/custodian-mailer-queue"
+        }
+      }
+    ]
+  },
+  "version": "0.9.47",
+  "execution": {
+    "id": "a44b0902-19a7-4027-9593-ab332321b0b7",
+    "start": 1761553552.900455,
+    "end_time": 1761553552.905476,
+    "duration": 0.005021095275878906
+  },
+  "config": {
+    "region": "us-east-1",
+    "regions": [],
+    "cache": "C:\\Users\\ysrin/.cache/c7n-org\\172327596604-us-east-1.cache",
+    "profile": null,
+    "account_id": "172327596604",
+    "assume_role": "arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole",
+    "session_policy": null,
+    "external_id": null,
+    "log_group": null,
+    "tracer": "default",
+    "metrics_enabled": false,
+    "metrics": null,
+    "output_dir": "output_local\\engg\\us-east-1",
+    "cache_period": 15,
+    "dryrun": true,
+    "authorization_file": null
+  },
+  "sys-stats": {},
+  "api-stats": {},
+  "metrics": [
+    {
+      "MetricName": "ResourceCount",
+      "Timestamp": "2025-10-27T13:55:52.903851",
+      "Value": 0,
+      "Unit": "Count"
+    },
+    {
+      "MetricName": "ResourceTime",
+      "Timestamp": "2025-10-27T13:55:52.903851",
+      "Value": 0.0033960342407226562,
+      "Unit": "Seconds"
+    }
+  ]
+}

@@ -1,0 +1,111 @@
+{
+  "policy": {
+    "name": "aws-rds-cluster-snapshot-old",
+    "resource": "rds-cluster-snapshot",
+    "description": "Notifies of and deletes old RDS cluster manual snapshots\n",
+    "mode": {
+      "type": "periodic",
+      "schedule": "cron(0, 23, ?, *, SUN, *)",
+      "role": "arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole",
+      "tags": {
+        "contact": "ysrinu95@gmail.com",
+        "environment": "{environment}",
+        "repo": "devops/cloud-custodian/c7n"
+      }
+    },
+    "filters": [
+      {
+        "type": "value",
+        "key": "SnapshotType",
+        "value": "manual",
+        "op": "eq"
+      },
+      {
+        "type": "age",
+        "days": 90,
+        "op": "ge"
+      },
+      {
+        "tag:c7n-exception:retention": "absent"
+      }
+    ],
+    "actions": [
+      "delete",
+      {
+        "template": "aws-basic_email.html",
+        "to": [
+          "ysrinu95@gmail.com",
+          "event-owner",
+          "resource-owner"
+        ],
+        "transport": {
+          "type": "sqs",
+          "queue": "https://sqs.us-east-1.amazonaws.com/172327596604/custodian-mailer-queue"
+        },
+        "type": "notify",
+        "priority_header": 1,
+        "subject": "[c7n] [{{ account }}] RDS Cluster Snapshots older than 90 days ({{ region }})",
+        "violation_desc": "RDS Snapshots older than 90 days",
+        "action_desc": "Actions taken: RDS Cluster Snapshots older than 90 days have been deleted. <br>          \n"
+      }
+    ]
+  },
+  "version": "0.9.47",
+  "execution": {
+    "id": "40190ece-a439-4220-bb3b-32b666dfc94c",
+    "start": 1761554030.1942387,
+    "end_time": 1761554031.8169334,
+    "duration": 1.622694730758667
+  },
+  "config": {
+    "region": "us-east-1",
+    "regions": [
+      "us-east-1"
+    ],
+    "cache": "~/.cache/cloud-custodian.cache",
+    "profile": null,
+    "account_id": "172327596604",
+    "assume_role": null,
+    "session_policy": null,
+    "external_id": null,
+    "log_group": null,
+    "tracer": null,
+    "metrics_enabled": null,
+    "metrics": null,
+    "output_dir": "output_local",
+    "cache_period": 15,
+    "dryrun": true,
+    "authorization_file": null,
+    "subparser": "run",
+    "config": null,
+    "configs": [
+      "c7n\\policies\\rds.yml"
+    ],
+    "policy_filters": [],
+    "resource_types": [],
+    "verbose": null,
+    "quiet": null,
+    "debug": false,
+    "skip_validation": false,
+    "command": "c7n.commands.run",
+    "vars": null
+  },
+  "sys-stats": {},
+  "api-stats": {
+    "rds.DescribeDBClusterSnapshots": 1
+  },
+  "metrics": [
+    {
+      "MetricName": "ResourceCount",
+      "Timestamp": "2025-10-27T14:03:51.815262",
+      "Value": 0,
+      "Unit": "Count"
+    },
+    {
+      "MetricName": "ResourceTime",
+      "Timestamp": "2025-10-27T14:03:51.815262",
+      "Value": 1.6210238933563232,
+      "Unit": "Seconds"
+    }
+  ]
+}

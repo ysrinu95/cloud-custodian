@@ -392,8 +392,67 @@ jobs:
           echo "Creating real vulnerable resources that GuardDuty will detect"
           echo ""
           
-          echo "✅ GuardDuty demo scenario completed"
-          echo "📊 Check AWS GuardDuty console for findings"
+          # Use the comprehensive GuardDuty demo script
+          cd c7n
+          
+          # Make the script executable
+          chmod +x scripts/guardduty-security-demo.sh
+          
+          # Set environment variables for the demo
+          export AWS_REGION="${{ env.AWS_REGION }}"
+          export MONITORING_DURATION="${{ github.event.inputs.monitoring_duration || '15' }}"
+          
+          echo "🔧 Demo Configuration:"
+          echo "   Region: $AWS_REGION"
+          echo "   Monitoring Duration: $MONITORING_DURATION minutes"
+          echo "   Account: ${{ github.event.inputs.target_accounts || 'engg' }}"
+          echo ""
+          
+          # Check if GuardDuty is enabled first
+          echo "🔍 Checking GuardDuty service status..."
+          ./scripts/guardduty-security-demo.sh --check-only
+          
+          if [[ "${{ github.event.inputs.dry_run }}" == "true" ]]; then
+            echo "🧪 DRY RUN MODE: Would create vulnerable resources"
+            echo "   - EC2 instance with overly permissive security group"
+            echo "   - Security group allowing SSH (22) from 0.0.0.0/0"
+            echo "   - Security group allowing database ports from 0.0.0.0/0"
+            echo "   - Instance with suspicious network activities"
+            echo "   - Simulated cryptocurrency mining DNS queries"
+            echo "   - Simulated malware C&C communication patterns"
+            echo ""
+            echo "✅ Dry run completed - no actual resources created"
+          else
+            echo "🚀 LIVE MODE: Creating real vulnerable resources"
+            echo "⚠️ This will create actual AWS resources and generate GuardDuty findings"
+            echo ""
+            
+            # Run the full GuardDuty demo
+            ./scripts/guardduty-security-demo.sh --region "$AWS_REGION" --duration "$MONITORING_DURATION"
+            
+            echo ""
+            echo "✅ GuardDuty demo scenario completed"
+          fi
+          
+          echo ""
+          echo "📊 Next Steps:"
+          echo "🔗 Monitor Progress:"
+          echo "   • GuardDuty Console: https://$AWS_REGION.console.aws.amazon.com/guardduty/home?region=$AWS_REGION#/findings"
+          echo "   • CloudWatch Logs: https://$AWS_REGION.console.aws.amazon.com/cloudwatch/home?region=$AWS_REGION#logsV2:log-groups"
+          echo "   • EC2 Console: https://$AWS_REGION.console.aws.amazon.com/ec2/home?region=$AWS_REGION#Instances:"
+          echo ""
+          echo "💡 Expected GuardDuty Findings:"
+          echo "   • UnauthorizedAPICall:EC2/MaliciousIPCaller"
+          echo "   • CryptoCurrency:EC2/BitcoinTool.B!DNS"  
+          echo "   • Trojan:EC2/DropPoint!DNS"
+          echo "   • Recon:EC2/PortProbeUnprotectedPort"
+          echo "   • Policy:IAMUser/RootCredentialUsage"
+          echo ""
+          echo "🔄 When findings are generated, Cloud Custodian will:"
+          echo "   ✅ Send notifications to security team"
+          echo "   ✅ Tag findings with compliance status"
+          echo "   ✅ Queue email notifications via SQS"
+          echo "   ✅ Trigger Slack alerts"
 
   security-demo-config:
     name: 'Config REAL Compliance Demo'
@@ -433,8 +492,160 @@ jobs:
           echo "Creating real compliance violations that Config will detect"
           echo ""
           
-          echo "✅ Config compliance demo scenario completed"
-          echo "📊 Check AWS Config console for compliance status"
+          # Use the comprehensive Config demo script
+          cd c7n
+          
+          # Make the script executable
+          chmod +x scripts/config-compliance-demo.sh
+          
+          # Set environment variables for the demo
+          export AWS_REGION="${{ env.AWS_REGION }}"
+          export MONITORING_DURATION="${{ github.event.inputs.monitoring_duration || '15' }}"
+          
+          echo "🔧 Demo Configuration:"
+          echo "   Region: $AWS_REGION"
+          echo "   Monitoring Duration: $MONITORING_DURATION minutes"
+          echo "   Account: ${{ github.event.inputs.target_accounts || 'engg' }}"
+          echo ""
+          
+          # Check if Config is enabled first
+          echo "🔍 Checking AWS Config service status..."
+          ./scripts/config-compliance-demo.sh --check-only
+          
+          if [[ "${{ github.event.inputs.dry_run }}" == "true" ]]; then
+            echo "🧪 DRY RUN MODE: Would create compliance violations"
+            echo "   - S3 bucket with public read access"
+            echo "   - Unencrypted EBS volume"
+            echo "   - Security group with overly permissive rules"
+            echo "   - Config rules: s3-bucket-public-read-prohibited, encrypted-volumes"
+            echo ""
+            echo "✅ Dry run completed - no actual resources created"
+          else
+            echo "🚀 LIVE MODE: Creating real compliance violations"
+            echo "⚠️ This will create actual AWS resources that violate Config rules"
+            echo ""
+            
+            # Run the full Config demo
+            ./scripts/config-compliance-demo.sh --region "$AWS_REGION" --duration "$MONITORING_DURATION"
+            
+            echo ""
+            echo "✅ Config compliance demo scenario completed"
+          fi
+          
+          echo ""
+          echo "📊 Next Steps:"
+          echo "🔗 Monitor Progress:"
+          echo "   • Config Console: https://$AWS_REGION.console.aws.amazon.com/config/home?region=$AWS_REGION#/rules"
+          echo "   • CloudWatch Logs: https://$AWS_REGION.console.aws.amazon.com/cloudwatch/home?region=$AWS_REGION#logsV2:log-groups"
+          echo "   • S3 Console: https://$AWS_REGION.console.aws.amazon.com/s3/home?region=$AWS_REGION"
+          echo ""
+          echo "💡 Expected Config Rule Violations:"
+          echo "   • S3_BUCKET_PUBLIC_READ_PROHIBITED → Public bucket access"
+          echo "   • ENCRYPTED_VOLUMES → Unencrypted EBS volume"
+          echo "   • EC2_SECURITY_GROUP_ATTACHED_TO_ENI → Overly permissive SG"
+          echo ""
+          echo "🔄 When violations are detected, Cloud Custodian will:"
+          echo "   ✅ Invoke compliance tagger Lambda"
+          echo "   ✅ Tag non-compliant resources"
+          echo "   ✅ Send compliance team notifications"
+          echo "   ✅ Queue email notifications via SQS"
+
+  security-demo-securityhub:
+    name: 'Security Hub REAL Security Demo'
+    runs-on: ubuntu-latest
+    if: github.event.inputs.operation_type == 'demo-securityhub-real'
+    
+    permissions:
+      id-token: write
+      contents: read
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-securityhub-demo-${{ github.run_number }}
+      
+      - name: Install Dependencies
+        run: |
+          pip install --upgrade pip
+          pip install c7n c7n-org c7n-mailer
+          sudo apt-get update && sudo apt-get install -y jq
+      
+      - name: Run Security Hub REAL Security Demo
+        run: |
+          echo "🔒 Demo: Security Hub REAL Critical Findings Response"
+          echo "════════════════════════════════════════════════"
+          echo "Creating real security violations that Security Hub will detect"
+          echo ""
+          
+          # Use the comprehensive Security Hub demo script
+          cd c7n
+          
+          # Make the script executable
+          chmod +x scripts/securityhub-demo.sh
+          
+          # Set environment variables for the demo
+          export AWS_REGION="${{ env.AWS_REGION }}"
+          export MONITORING_DURATION="${{ github.event.inputs.monitoring_duration || '15' }}"
+          
+          echo "🔧 Demo Configuration:"
+          echo "   Region: $AWS_REGION"
+          echo "   Monitoring Duration: $MONITORING_DURATION minutes"
+          echo "   Account: ${{ github.event.inputs.target_accounts || 'engg' }}"
+          echo ""
+          
+          # Check if Security Hub is enabled first
+          echo "🔍 Checking Security Hub service status..."
+          ./scripts/securityhub-demo.sh --check-only
+          
+          if [[ "${{ github.event.inputs.dry_run }}" == "true" ]]; then
+            echo "🧪 DRY RUN MODE: Would create security violations"
+            echo "   - Unencrypted public S3 bucket"
+            echo "   - Security group with unrestricted access (SSH, HTTP, databases)"
+            echo "   - IAM user without MFA"
+            echo "   - AWS Foundational Security Standard violations"
+            echo ""
+            echo "✅ Dry run completed - no actual resources created"
+          else
+            echo "🚀 LIVE MODE: Creating real security violations"
+            echo "⚠️ This will create actual AWS resources that violate Security Hub standards"
+            echo ""
+            
+            # Run the full Security Hub demo
+            ./scripts/securityhub-demo.sh --region "$AWS_REGION" --duration "$MONITORING_DURATION"
+            
+            echo ""
+            echo "✅ Security Hub demo scenario completed"
+          fi
+          
+          echo ""
+          echo "📊 Next Steps:"
+          echo "🔗 Monitor Progress:"
+          echo "   • Security Hub Console: https://$AWS_REGION.console.aws.amazon.com/securityhub/home?region=$AWS_REGION#/findings"
+          echo "   • Standards Dashboard: https://$AWS_REGION.console.aws.amazon.com/securityhub/home?region=$AWS_REGION#/standards"
+          echo "   • CloudWatch Logs: https://$AWS_REGION.console.aws.amazon.com/cloudwatch/home?region=$AWS_REGION#logsV2:log-groups"
+          echo ""
+          echo "💡 Expected Security Hub Findings:"
+          echo "   • S3.4: S3 buckets should have server-side encryption enabled"
+          echo "   • S3.1: S3 bucket public access should be restricted"
+          echo "   • EC2.19: Security groups should not allow unrestricted access"
+          echo "   • IAM.6: Hardware MFA should be enabled for root user"
+          echo ""
+          echo "🔄 When findings are generated, Cloud Custodian will:"
+          echo "   ✅ Update finding workflow status"
+          echo "   ✅ Set compliance status appropriately"
+          echo "   ✅ Send notifications to security team"
+          echo "   ✅ Queue Slack alerts for critical findings"
 
   security-demo-all:
     name: 'All Security Demos REAL Suite'
@@ -518,8 +729,60 @@ jobs:
           echo "Creating public EC2 instance for Cloud Custodian to detect"
           echo ""
           
-          echo "✅ EC2 public instance demo completed"
-          echo "📊 Check EC2 console for created resources"
+          # Use the comprehensive EC2 demo script
+          cd c7n
+          
+          # Make the script executable
+          chmod +x scripts/ec2-public-demo.sh
+          
+          # Set environment variables for the demo
+          export AWS_REGION="${{ env.AWS_REGION }}"
+          export MONITORING_DURATION="${{ github.event.inputs.monitoring_duration || '15' }}"
+          
+          echo "🔧 Demo Configuration:"
+          echo "   Region: $AWS_REGION"
+          echo "   Monitoring Duration: $MONITORING_DURATION minutes"
+          echo "   Account: ${{ github.event.inputs.target_accounts || 'engg' }}"
+          echo ""
+          
+          if [[ "${{ github.event.inputs.dry_run }}" == "true" ]]; then
+            echo "🧪 DRY RUN MODE: Would create public EC2 instances"
+            echo "   - 3 EC2 instances with public IP addresses"
+            echo "   - Security group allowing SSH/HTTP/HTTPS from 0.0.0.0/0"
+            echo "   - Web server with demo page"
+            echo "   - Mixed tagging scenarios (tagged, untagged, suspicious)"
+            echo ""
+            echo "✅ Dry run completed - no actual resources created"
+          else
+            echo "🚀 LIVE MODE: Creating real public EC2 instances"
+            echo "⚠️ This will create actual AWS resources with public access"
+            echo ""
+            
+            # Run the full EC2 demo
+            ./scripts/ec2-public-demo.sh --region "$AWS_REGION" --duration "$MONITORING_DURATION"
+            
+            echo ""
+            echo "✅ EC2 public instance demo completed"
+          fi
+          
+          echo ""
+          echo "📊 Next Steps:"
+          echo "🔗 Monitor Progress:"
+          echo "   • EC2 Console: https://$AWS_REGION.console.aws.amazon.com/ec2/home?region=$AWS_REGION#Instances:"
+          echo "   • CloudWatch Logs: https://$AWS_REGION.console.aws.amazon.com/cloudwatch/home?region=$AWS_REGION#logsV2:log-groups"
+          echo "   • Lambda Console: https://$AWS_REGION.console.aws.amazon.com/lambda/home?region=$AWS_REGION#/functions"
+          echo ""
+          echo "💡 Expected Cloud Custodian Actions:"
+          echo "   • ec2-public-instances: Tag public instances for review"
+          echo "   • ec2-require-tags: Add missing required tags"
+          echo "   • ec2-security-group-compliance: Review overly permissive SGs"
+          echo "   • ec2-instance-lifecycle: Monitor and manage instance states"
+          echo ""
+          echo "🔄 When instances are detected, Cloud Custodian will:"
+          echo "   ✅ Tag instances with compliance status"
+          echo "   ✅ Send notifications to operations team"
+          echo "   ✅ Log activities to CloudWatch"
+          echo "   ✅ Queue email notifications via SQS"
 
   # ==============================================================================
   # Cleanup Demo Jobs
@@ -563,7 +826,60 @@ jobs:
           echo "Cleaning up resources created by Cloud Custodian demos"
           echo ""
           
-          echo "✅ Demo resource cleanup completed"
+          # Use the comprehensive cleanup script
+          cd c7n
+          
+          # Make the script executable
+          chmod +x scripts/cleanup-all-demos.sh
+          
+          # Set environment variables for cleanup
+          export AWS_REGION="${{ env.AWS_REGION }}"
+          
+          echo "🔧 Cleanup Configuration:"
+          echo "   Region: $AWS_REGION"
+          echo "   Account: ${{ github.event.inputs.target_accounts || 'engg' }}"
+          echo ""
+          
+          if [[ "${{ github.event.inputs.dry_run }}" == "true" ]]; then
+            echo "🧪 DRY RUN MODE: Would clean up demo resources"
+            echo "   - EC2 instances, security groups, key pairs, EBS volumes"
+            echo "   - S3 buckets with 'custodian' and 'demo/test' in names"
+            echo "   - IAM users and roles with 'demo/test' in names"
+            echo "   - KMS keys with demo aliases"
+            echo "   - SQS queues with 'custodian' prefix and 'demo/test'"
+            echo "   - Macie classification jobs with 'demo/test' names"
+            echo "   - CloudTrail trails with 'demo/test' names"
+            echo ""
+            echo "✅ Dry run completed - no actual cleanup performed"
+          else
+            echo "🚀 LIVE MODE: Cleaning up real demo resources"
+            echo "⚠️ This will permanently delete demo resources!"
+            echo ""
+            
+            # Run the comprehensive cleanup
+            ./scripts/cleanup-all-demos.sh --region "$AWS_REGION"
+            
+            echo ""
+            echo "✅ Demo resource cleanup completed"
+          fi
+          
+          echo ""
+          echo "📊 Resources Cleaned:"
+          echo "   🖥️ EC2 instances (terminated)"
+          echo "   🔒 Security groups (deleted)"
+          echo "   🔑 Key pairs (deleted)"
+          echo "   💾 EBS volumes (deleted)"
+          echo "   📦 S3 buckets (deleted)"
+          echo "   👤 IAM users/roles (deleted)"
+          echo "   🔐 KMS keys (scheduled for deletion)"
+          echo "   📬 SQS queues (deleted)"
+          echo "   🔍 Macie jobs (cancelled)"
+          echo "   📊 CloudTrail trails (deleted)"
+          echo ""
+          echo "🔍 Verification:"
+          echo "   • Check AWS consoles to confirm resource removal"
+          echo "   • KMS keys have 7-day deletion waiting period"
+          echo "   • CloudWatch logs are retained separately"
 
   # ==============================================================================
   # Policy Deployment Jobs
@@ -1379,7 +1695,7 @@ jobs:
   notify:
     name: 'Demo Completion Notification'
     runs-on: ubuntu-latest
-    needs: [validate, deploy, validate-deployed-lambdas, validate-lambdas, verify-deployment, setup-validation, security-demo-guardduty, security-demo-config, security-demo-all, resource-demo-ec2, cleanup-demo-resources]
+    needs: [validate, deploy, validate-deployed-lambdas, validate-lambdas, verify-deployment, setup-validation, security-demo-guardduty, security-demo-config, security-demo-securityhub, security-demo-all, resource-demo-ec2, cleanup-demo-resources]
     if: always() && github.event_name == 'workflow_dispatch'
     
     steps:

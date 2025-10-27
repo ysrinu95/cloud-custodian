@@ -1,0 +1,2 @@
+2025-10-27 14:01:44,096 - custodian.policy - INFO - policy:aws-lambda-unused-functions resource:aws.lambda region:us-west-2 count:0 time:1.93
+2025-10-27 14:03:44,000 - custodian.policy - INFO - policy:aws-lambda-unused-functions resource:aws.lambda region:us-east-1 count:0 time:0.00

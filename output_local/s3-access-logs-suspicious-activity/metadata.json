@@ -1,0 +1,148 @@
+{
+  "policy": {
+    "name": "s3-access-logs-suspicious-activity",
+    "description": "Monitor S3 access logs for suspicious activity patterns.\nThis policy analyzes S3 access logs and triggers on anomalous access patterns.\n",
+    "resource": "aws.s3",
+    "mode": {
+      "type": "cloudtrail",
+      "events": [
+        {
+          "source": "s3.amazonaws.com",
+          "event": "GetObject",
+          "ids": "requestParameters.bucketName"
+        },
+        {
+          "source": "s3.amazonaws.com",
+          "event": "DeleteObject",
+          "ids": "requestParameters.bucketName"
+        },
+        {
+          "source": "s3.amazonaws.com",
+          "event": "PutBucketPolicy",
+          "ids": "requestParameters.bucketName"
+        }
+      ],
+      "role": "arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole",
+      "timeout": 300,
+      "tags": {
+        "contact": "srinivasula.yallala@optum.com",
+        "repo": "aikyam-everything-as-code",
+        "terraform": "True",
+        "oid-owned": "True",
+        "aide-id": "UHGWM110-019726",
+        "service-tier": "p1",
+        "application": "cloud-custodian",
+        "managed-by": "jenkins",
+        "environment": "engg",
+        "component": "cloud-custodian-policy",
+        "policy-type": "security-findings",
+        "security-service": "s3-access-logs"
+      }
+    },
+    "filters": [
+      {
+        "type": "bucket-logging",
+        "op": "enabled"
+      },
+      {
+        "type": "event",
+        "key": "detail.requestParameters.key",
+        "op": "regex",
+        "value": ".*(password|secret|credential|key|token|private).*"
+      },
+      {
+        "or": [
+          {
+            "type": "event",
+            "key": "detail.sourceIPAddress",
+            "op": "not-in",
+            "value_from": {
+              "url": "s3://your-config-bucket/trusted-ips.txt"
+            }
+          }
+        ]
+      }
+    ],
+    "actions": [
+      {
+        "type": "tag",
+        "key": "SuspiciousAccess",
+        "value": "Detected-{now:%Y-%m-%d}"
+      },
+      {
+        "type": "toggle-versioning",
+        "enabled": true
+      },
+      {
+        "type": "notify",
+        "template": "aws-basic_email",
+        "priority_header": "2",
+        "violation_desc": "Suspicious S3 Access Pattern Detected",
+        "action_desc": "Suspicious access patterns detected in S3 access logs.\nThis may indicate unauthorized access or data exfiltration attempts.\n",
+        "to": [
+          "security-operations@optum.com"
+        ],
+        "transport": {
+          "type": "sqs",
+          "queue": "https://sqs.us-east-1.amazonaws.com/172327596604/custodian-mailer-queue"
+        }
+      }
+    ]
+  },
+  "version": "0.9.47",
+  "execution": {
+    "id": "43908eed-f881-4baf-a15f-dd467ad0d675",
+    "start": 1761553929.7112308,
+    "end_time": 1761553929.7191927,
+    "duration": 0.00796198844909668
+  },
+  "config": {
+    "region": "us-west-2",
+    "regions": [
+      "us-west-2"
+    ],
+    "cache": "~/.cache/cloud-custodian.cache",
+    "profile": null,
+    "account_id": "172327596604",
+    "assume_role": null,
+    "session_policy": null,
+    "external_id": null,
+    "log_group": null,
+    "tracer": null,
+    "metrics_enabled": null,
+    "metrics": null,
+    "output_dir": "output_local",
+    "cache_period": 15,
+    "dryrun": true,
+    "authorization_file": null,
+    "subparser": "run",
+    "config": null,
+    "configs": [
+      "c7n\\policies\\security-findings.yml"
+    ],
+    "policy_filters": [],
+    "resource_types": [],
+    "verbose": null,
+    "quiet": null,
+    "debug": false,
+    "skip_validation": false,
+    "command": "c7n.commands.run",
+    "vars": null
+  },
+  "sys-stats": {},
+  "api-stats": {},
+  "metrics": [
+    {
+      "MetricName": "ResourceCount",
+      "Timestamp": "2025-10-27T14:02:09.719192",
+      "Value": 0,
+      "Unit": "Count"
+    },
+    {
+      "MetricName": "ResourceTime",
+      "Timestamp": "2025-10-27T14:02:09.719192",
+      "Value": 0.007506847381591797,
+      "Unit": "Seconds"
+    }
+  ]
+}

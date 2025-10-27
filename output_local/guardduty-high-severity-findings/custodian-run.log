@@ -1,0 +1,1 @@
+2025-10-27 14:01:59,079 - custodian.policy - INFO - policy:guardduty-high-severity-findings resource:aws.guardduty-finding region:us-west-2 count:0 time:1.33

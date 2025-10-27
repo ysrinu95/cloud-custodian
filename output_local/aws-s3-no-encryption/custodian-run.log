@@ -1,0 +1,1 @@
+2025-10-27 14:04:04,923 - custodian.policy - INFO - policy:aws-s3-no-encryption resource:aws.s3 region:us-east-1 count:0 time:10.72

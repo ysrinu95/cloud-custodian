@@ -1,0 +1,41 @@
+[
+  {
+    "logGroupName": "/aws/lambda/custodian-ebs-unencrypted-volumes-scheduled",
+    "creationTime": 1760367199156,
+    "metricFilterCount": 0,
+    "arn": "arn:aws:logs:us-east-1:172327596604:log-group:/aws/lambda/custodian-ebs-unencrypted-volumes-scheduled:*",
+    "storedBytes": 25193,
+    "logGroupClass": "STANDARD",
+    "logGroupArn": "arn:aws:logs:us-east-1:172327596604:log-group:/aws/lambda/custodian-ebs-unencrypted-volumes-scheduled",
+    "Tags": [],
+    "c7n:MatchedFilters": [
+      "retentionInDays"
+    ]
+  },
+  {
+    "logGroupName": "/aws/lambda/custodian-iam-policy-monitoring-realtime",
+    "creationTime": 1760363607499,
+    "metricFilterCount": 0,
+    "arn": "arn:aws:logs:us-east-1:172327596604:log-group:/aws/lambda/custodian-iam-policy-monitoring-realtime:*",
+    "storedBytes": 1428781,
+    "logGroupClass": "STANDARD",
+    "logGroupArn": "arn:aws:logs:us-east-1:172327596604:log-group:/aws/lambda/custodian-iam-policy-monitoring-realtime",
+    "Tags": [],
+    "c7n:MatchedFilters": [
+      "retentionInDays"
+    ]
+  },
+  {
+    "logGroupName": "/aws/lambda/custodian-security-group-ssh-remediation-realtime",
+    "creationTime": 1760363602913,
+    "metricFilterCount": 0,
+    "arn": "arn:aws:logs:us-east-1:172327596604:log-group:/aws/lambda/custodian-security-group-ssh-remediation-realtime:*",
+    "storedBytes": 249930,
+    "logGroupClass": "STANDARD",
+    "logGroupArn": "arn:aws:logs:us-east-1:172327596604:log-group:/aws/lambda/custodian-security-group-ssh-remediation-realtime",
+    "Tags": [],
+    "c7n:MatchedFilters": [
+      "retentionInDays"
+    ]
+  }
+]

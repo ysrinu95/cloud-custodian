@@ -1,0 +1,163 @@
+[
+  {
+    "Name": "srini-test-optum",
+    "CreationDate": "2025-10-01T02:47:14+00:00",
+    "BucketArn": "arn:aws:s3:::srini-test-optum",
+    "Location": {
+      "LocationConstraint": "eu-north-1"
+    },
+    "Tags": [
+      {
+        "Key": "SecurityAlert",
+        "Value": "PublicBucketBlocked"
+      }
+    ],
+    "Policy": null,
+    "Acl": {
+      "Owner": {
+        "ID": "652a3fce8fb61fc38b86212b242043330d7acf8cc54f0c484f3b2ca3ee5a4f55"
+      },
+      "Grants": [
+        {
+          "Grantee": {
+            "ID": "652a3fce8fb61fc38b86212b242043330d7acf8cc54f0c484f3b2ca3ee5a4f55",
+            "Type": "CanonicalUser"
+          },
+          "Permission": "FULL_CONTROL"
+        }
+      ]
+    },
+    "Replication": null,
+    "Versioning": {},
+    "Website": null,
+    "Logging": {},
+    "Notification": {},
+    "Lifecycle": null
+  },
+  {
+    "Name": "ysr95-cloud-custodian-logs-26zsuuw4",
+    "CreationDate": "2025-10-26T16:11:05+00:00",
+    "BucketArn": "arn:aws:s3:::ysr95-cloud-custodian-logs-26zsuuw4",
+    "Location": {
+      "LocationConstraint": null
+    },
+    "Tags": [
+      {
+        "Key": "Project",
+        "Value": "cloud-custodian"
+      },
+      {
+        "Key": "Environment",
+        "Value": "prod"
+      },
+      {
+        "Key": "Purpose",
+        "Value": "Cloud Custodian Enterprise Logging"
+      },
+      {
+        "Key": "ManagedBy",
+        "Value": "terraform"
+      }
+    ],
+    "Policy": null,
+    "Acl": {
+      "Owner": {
+        "DisplayName": "ysrinuoptum95",
+        "ID": "652a3fce8fb61fc38b86212b242043330d7acf8cc54f0c484f3b2ca3ee5a4f55"
+      },
+      "Grants": [
+        {
+          "Grantee": {
+            "DisplayName": "ysrinuoptum95",
+            "ID": "652a3fce8fb61fc38b86212b242043330d7acf8cc54f0c484f3b2ca3ee5a4f55",
+            "Type": "CanonicalUser"
+          },
+          "Permission": "FULL_CONTROL"
+        }
+      ]
+    },
+    "Replication": null,
+    "Versioning": {
+      "Status": "Enabled"
+    },
+    "Website": null,
+    "Logging": {},
+    "Notification": {},
+    "Lifecycle": null
+  },
+  {
+    "Name": "ysr95-cloud-custodian-outputs-26zsuuw4",
+    "CreationDate": "2025-10-13T08:58:09+00:00",
+    "BucketArn": "arn:aws:s3:::ysr95-cloud-custodian-outputs-26zsuuw4",
+    "Location": {
+      "LocationConstraint": null
+    },
+    "Tags": [
+      {
+        "Key": "Project",
+        "Value": "cloud-custodian"
+      },
+      {
+        "Key": "Environment",
+        "Value": "prod"
+      },
+      {
+        "Key": "ManagedBy",
+        "Value": "terraform"
+      }
+    ],
+    "Policy": null,
+    "Acl": {
+      "Owner": {
+        "ID": "652a3fce8fb61fc38b86212b242043330d7acf8cc54f0c484f3b2ca3ee5a4f55"
+      },
+      "Grants": [
+        {
+          "Grantee": {
+            "ID": "652a3fce8fb61fc38b86212b242043330d7acf8cc54f0c484f3b2ca3ee5a4f55",
+            "Type": "CanonicalUser"
+          },
+          "Permission": "FULL_CONTROL"
+        }
+      ]
+    },
+    "Replication": null,
+    "Versioning": {
+      "Status": "Enabled"
+    },
+    "Website": null,
+    "Logging": {},
+    "Notification": {},
+    "Lifecycle": null
+  },
+  {
+    "Name": "ysr95-cloud-custodian-tf-bkt",
+    "CreationDate": "2025-10-08T15:49:21+00:00",
+    "BucketArn": "arn:aws:s3:::ysr95-cloud-custodian-tf-bkt",
+    "Location": {
+      "LocationConstraint": null
+    },
+    "Tags": [],
+    "Policy": null,
+    "Acl": {
+      "Owner": {
+        "ID": "652a3fce8fb61fc38b86212b242043330d7acf8cc54f0c484f3b2ca3ee5a4f55"
+      },
+      "Grants": [
+        {
+          "Grantee": {
+            "ID": "652a3fce8fb61fc38b86212b242043330d7acf8cc54f0c484f3b2ca3ee5a4f55",
+            "Type": "CanonicalUser"
+          },
+          "Permission": "FULL_CONTROL"
+        }
+      ]
+    },
+    "Replication": null,
+    "Versioning": {},
+    "Website": null,
+    "Logging": {},
+    "Notification": {},
+    "Lifecycle": null
+  }
+]

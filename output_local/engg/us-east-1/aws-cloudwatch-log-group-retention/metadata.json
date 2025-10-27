@@ -1,0 +1,85 @@
+{
+  "policy": {
+    "name": "aws-cloudwatch-log-group-retention",
+    "resource": "aws.log-group",
+    "description": "Notifies and sets the retention for log groups set to never expire\n",
+    "mode": {
+      "type": "periodic",
+      "schedule": "cron(0, 23, ?, *, SUN, *)",
+      "role": "arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole",
+      "tags": {
+        "contact": "ysrinu95@gmail.com",
+        "environment": "engg",
+        "repo": "devops/cloud-custodian/c7n"
+      }
+    },
+    "filters": [
+      {
+        "retentionInDays": "absent"
+      }
+    ],
+    "actions": [
+      {
+        "type": "retention",
+        "days": 365
+      },
+      {
+        "template": "aws-basic_email.html",
+        "to": [
+          "ysrinu95@gmail.com",
+          "event-owner",
+          "resource-owner"
+        ],
+        "transport": {
+          "type": "sqs",
+          "queue": "https://sqs.us-east-1.amazonaws.com/172327596604/custodian-mailer-queue"
+        },
+        "type": "notify",
+        "subject": "[c7n] [{{ account }}] CloudWatch Log Group Retention Updated ({{ region }})",
+        "violation_desc": "CloudWatch Log Group with no retention set",
+        "action_desc": "Log group retention has been updated to 365 days.<br>\nIf the log group is defined in code, please update the source to include a retention period.<br>\nSee <a href=\"https://docs.aws.amazon.com/managedservices/latest/userguide/log-customize-retention.html\">AWS documentation</a> for more info.\n"
+      }
+    ]
+  },
+  "version": "0.9.47",
+  "execution": {
+    "id": "e1adf30a-8a63-4b01-9ac7-123a1f9e0cc9",
+    "start": 1761553530.1417744,
+    "end_time": 1761553530.14639,
+    "duration": 0.0046155452728271484
+  },
+  "config": {
+    "region": "us-east-1",
+    "regions": [],
+    "cache": "C:\\Users\\ysrin/.cache/c7n-org\\172327596604-us-east-1.cache",
+    "profile": null,
+    "account_id": "172327596604",
+    "assume_role": "arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole",
+    "session_policy": null,
+    "external_id": null,
+    "log_group": null,
+    "tracer": "default",
+    "metrics_enabled": false,
+    "metrics": null,
+    "output_dir": "output_local\\engg\\us-east-1",
+    "cache_period": 15,
+    "dryrun": true,
+    "authorization_file": null
+  },
+  "sys-stats": {},
+  "api-stats": {},
+  "metrics": [
+    {
+      "MetricName": "ResourceCount",
+      "Timestamp": "2025-10-27T13:55:30.145290",
+      "Value": 3,
+      "Unit": "Count"
+    },
+    {
+      "MetricName": "ResourceTime",
+      "Timestamp": "2025-10-27T13:55:30.145290",
+      "Value": 0.0015060901641845703,
+      "Unit": "Seconds"
+    }
+  ]
+}

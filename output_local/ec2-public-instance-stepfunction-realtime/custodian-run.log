@@ -1,0 +1,1 @@
+2025-10-27 14:02:11,201 - custodian.policy - INFO - policy:ec2-public-instance-stepfunction-realtime resource:aws.ec2 region:us-west-2 count:0 time:0.02

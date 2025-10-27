@@ -1,0 +1,2 @@
+2025-10-27 14:02:09,687 - custodian.access-analyzer - WARNING - policy: iam-access-analyzer-external-access no active access analyzer found in account
+2025-10-27 14:02:09,704 - custodian.policy - INFO - policy:iam-access-analyzer-external-access resource:aws.access-analyzer-finding region:us-west-2 count:0 time:1.28

@@ -1,0 +1,118 @@
+{
+  "policy": {
+    "name": "config-compliance-violations",
+    "description": "Respond to AWS Config rule compliance violations in real-time.\nThis policy triggers when resources become non-compliant with Config rules.\n",
+    "resource": "aws.config-rule",
+    "mode": {
+      "type": "cloudtrail",
+      "events": [
+        {
+          "source": "aws.config",
+          "event": "PutEvaluations",
+          "ids": "requestParameters.evaluations[].complianceResourceId"
+        }
+      ],
+      "role": "arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole",
+      "timeout": 300,
+      "tags": {
+        "contact": "srinivasula.yallala@optum.com",
+        "repo": "aikyam-everything-as-code",
+        "terraform": "True",
+        "oid-owned": "True",
+        "aide-id": "UHGWM110-019726",
+        "service-tier": "p1",
+        "application": "cloud-custodian",
+        "managed-by": "jenkins",
+        "environment": "engg",
+        "component": "cloud-custodian-policy",
+        "policy-type": "security-findings",
+        "security-service": "config"
+      }
+    },
+    "filters": [
+      {
+        "type": "value",
+        "key": "compliance.ComplianceType",
+        "value": "NON_COMPLIANT"
+      },
+      {
+        "type": "value",
+        "key": "ConfigRuleName",
+        "op": "in",
+        "value": [
+          "encrypted-volumes",
+          "s3-bucket-public-read-prohibited",
+          "s3-bucket-public-write-prohibited",
+          "iam-password-policy",
+          "root-account-mfa-enabled",
+          "restricted-ssh",
+          "restricted-common-ports"
+        ]
+      }
+    ],
+    "actions": [
+      {
+        "type": "invoke-lambda",
+        "function": "custodian-config-compliance-tagger",
+        "async": true
+      },
+      {
+        "type": "notify",
+        "template": "aws-basic_email",
+        "priority_header": "2",
+        "violation_desc": "AWS Config Rule Compliance Violation",
+        "action_desc": "A resource has become non-compliant with AWS Config rules.\nReview and remediate the compliance violation.\n",
+        "to": [
+          "compliance-team@optum.com"
+        ],
+        "transport": {
+          "type": "sqs",
+          "queue": "https://sqs.us-east-1.amazonaws.com/172327596604/custodian-mailer-queue"
+        }
+      }
+    ]
+  },
+  "version": "0.9.47",
+  "execution": {
+    "id": "689bfbad-97fa-4d68-8768-2ff5bfff0fc8",
+    "start": 1761553542.4350643,
+    "end_time": 1761553543.9599817,
+    "duration": 1.5249173641204834
+  },
+  "config": {
+    "region": "us-east-1",
+    "regions": [],
+    "cache": "C:\\Users\\ysrin/.cache/c7n-org\\172327596604-us-east-1.cache",
+    "profile": null,
+    "account_id": "172327596604",
+    "assume_role": "arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole",
+    "session_policy": null,
+    "external_id": null,
+    "log_group": null,
+    "tracer": "default",
+    "metrics_enabled": false,
+    "metrics": null,
+    "output_dir": "output_local\\engg\\us-east-1",
+    "cache_period": 15,
+    "dryrun": true,
+    "authorization_file": null
+  },
+  "sys-stats": {},
+  "api-stats": {
+    "config.DescribeConfigRules": 1
+  },
+  "metrics": [
+    {
+      "MetricName": "ResourceCount",
+      "Timestamp": "2025-10-27T13:55:43.958316",
+      "Value": 0,
+      "Unit": "Count"
+    },
+    {
+      "MetricName": "ResourceTime",
+      "Timestamp": "2025-10-27T13:55:43.958316",
+      "Value": 1.523252010345459,
+      "Unit": "Seconds"
+    }
+  ]
+}

@@ -1,0 +1,105 @@
+{
+  "policy": {
+    "name": "aws-ec2-stop-public-instances",
+    "resource": "aws.ec2",
+    "description": "Notifies of and stops EC2 instances launched in a public subnet\n",
+    "mode": {
+      "type": "cloudtrail",
+      "events": [
+        "RunInstances"
+      ],
+      "role": "arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole",
+      "tags": {
+        "contact": "ysrinu95@gmail.com",
+        "environment": "{environment}",
+        "repo": "devops/cloud-custodian/c7n"
+      }
+    },
+    "filters": [
+      {
+        "type": "event",
+        "key": "detail.requestParameters.networkInterfaceSet.items[].associatePublicIpAddress",
+        "value": true
+      }
+    ],
+    "actions": [
+      {
+        "type": "stop",
+        "force": true
+      },
+      {
+        "template": "aws-basic_email.html",
+        "to": [
+          "ysrinu95@gmail.com",
+          "event-owner",
+          "resource-owner"
+        ],
+        "transport": {
+          "type": "sqs",
+          "queue": "https://sqs.us-east-1.amazonaws.com/172327596604/custodian-mailer-queue"
+        },
+        "type": "notify",
+        "priority_header": 1,
+        "subject": "[c7n] [{{ account }}] Public EC2 Instance Launched ({{ region }})",
+        "violation_desc": "EC2 instance launched in a public subnet",
+        "action_desc": "Actions taken: The violating EC2 instance has been stopped. <br>\nTo expose an application or service publicly, a load balancer should be placed\nin a public subnet which routes the traffic internally. <br>          \n<a href=\"https://docs.aws.amazon.com/securityhub/latest/userguide/securityhub-standards-fsbp-controls.html#ec2-9-remediation\">Documentation</a> \n"
+      }
+    ]
+  },
+  "version": "0.9.47",
+  "execution": {
+    "id": "c72f01ff-f8b1-4d31-bdd8-5b97e4f5a92b",
+    "start": 1761554018.271858,
+    "end_time": 1761554018.2763877,
+    "duration": 0.004529714584350586
+  },
+  "config": {
+    "region": "us-east-1",
+    "regions": [
+      "us-east-1"
+    ],
+    "cache": "~/.cache/cloud-custodian.cache",
+    "profile": null,
+    "account_id": "172327596604",
+    "assume_role": null,
+    "session_policy": null,
+    "external_id": null,
+    "log_group": null,
+    "tracer": null,
+    "metrics_enabled": null,
+    "metrics": null,
+    "output_dir": "output_local",
+    "cache_period": 15,
+    "dryrun": true,
+    "authorization_file": null,
+    "subparser": "run",
+    "config": null,
+    "configs": [
+      "c7n\\policies\\ec2.yml"
+    ],
+    "policy_filters": [],
+    "resource_types": [],
+    "verbose": null,
+    "quiet": null,
+    "debug": false,
+    "skip_validation": false,
+    "command": "c7n.commands.run",
+    "vars": null
+  },
+  "sys-stats": {},
+  "api-stats": {},
+  "metrics": [
+    {
+      "MetricName": "ResourceCount",
+      "Timestamp": "2025-10-27T14:03:38.276387",
+      "Value": 0,
+      "Unit": "Count"
+    },
+    {
+      "MetricName": "ResourceTime",
+      "Timestamp": "2025-10-27T14:03:38.276387",
+      "Value": 0.0020170211791992188,
+      "Unit": "Seconds"
+    }
+  ]
+}

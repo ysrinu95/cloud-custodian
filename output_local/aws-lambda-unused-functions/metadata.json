@@ -1,0 +1,120 @@
+{
+  "policy": {
+    "name": "aws-lambda-unused-functions",
+    "resource": "aws.lambda",
+    "description": "Notifies of Lambda functions appear to be unused.\n",
+    "mode": {
+      "type": "periodic",
+      "schedule": "cron(0, 23, ?, *, SUN, *)",
+      "role": "arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole",
+      "tags": {
+        "contact": "ysrinu95@gmail.com",
+        "environment": "{environment}",
+        "repo": "devops/cloud-custodian/c7n"
+      }
+    },
+    "filters": [
+      {
+        "type": "metrics",
+        "name": "Invocations",
+        "op": "equal",
+        "statistics": "Sum",
+        "days": 365,
+        "value": 0,
+        "missing-value": 0
+      },
+      {
+        "type": "value",
+        "key": "LastModified",
+        "op": "gt",
+        "value": 183,
+        "value_type": "age"
+      },
+      {
+        "not": [
+          {
+            "type": "value",
+            "key": "FunctionName",
+            "op": "regex",
+            "value": "(custodian)-\\w+",
+            "value_type": "normalize"
+          }
+        ]
+      }
+    ],
+    "actions": [
+      {
+        "template": "aws-basic_email.html",
+        "to": [
+          "ysrinu95@gmail.com",
+          "event-owner",
+          "resource-owner"
+        ],
+        "transport": {
+          "type": "sqs",
+          "queue": "https://sqs.us-east-1.amazonaws.com/172327596604/custodian-mailer-queue"
+        },
+        "type": "notify",
+        "subject": "[c7n] [{{ account }}] Lambda Functions are unused ({{ region }})",
+        "violation_desc": "Lambda Functions that appear to be unused",
+        "action_desc": "No action taken. Please delete if not needed.\n"
+      }
+    ]
+  },
+  "version": "0.9.47",
+  "execution": {
+    "id": "6e5adce6-d189-47ee-ad45-9eb793d8d9c0",
+    "start": 1761554023.999406,
+    "end_time": 1761554024.0025442,
+    "duration": 0.0031380653381347656
+  },
+  "config": {
+    "region": "us-east-1",
+    "regions": [
+      "us-east-1"
+    ],
+    "cache": "~/.cache/cloud-custodian.cache",
+    "profile": null,
+    "account_id": "172327596604",
+    "assume_role": null,
+    "session_policy": null,
+    "external_id": null,
+    "log_group": null,
+    "tracer": null,
+    "metrics_enabled": null,
+    "metrics": null,
+    "output_dir": "output_local",
+    "cache_period": 15,
+    "dryrun": true,
+    "authorization_file": null,
+    "subparser": "run",
+    "config": null,
+    "configs": [
+      "c7n\\policies\\lambda.yml"
+    ],
+    "policy_filters": [],
+    "resource_types": [],
+    "verbose": null,
+    "quiet": null,
+    "debug": false,
+    "skip_validation": false,
+    "command": "c7n.commands.run",
+    "vars": null
+  },
+  "sys-stats": {},
+  "api-stats": {},
+  "metrics": [
+    {
+      "MetricName": "ResourceCount",
+      "Timestamp": "2025-10-27T14:03:44.002544",
+      "Value": 0,
+      "Unit": "Count"
+    },
+    {
+      "MetricName": "ResourceTime",
+      "Timestamp": "2025-10-27T14:03:44.002544",
+      "Value": 0.0013728141784667969,
+      "Unit": "Seconds"
+    }
+  ]
+}

@@ -1,0 +1,2 @@
+2025-10-27 14:01:35,127 - custodian.policy - INFO - policy:aws-ec2-stop-public-instances resource:aws.ec2 region:us-west-2 count:0 time:0.00
+2025-10-27 14:03:38,276 - custodian.policy - INFO - policy:aws-ec2-stop-public-instances resource:aws.ec2 region:us-east-1 count:0 time:0.00

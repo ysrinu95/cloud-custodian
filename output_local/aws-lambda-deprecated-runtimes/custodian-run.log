@@ -1,0 +1,2 @@
+2025-10-27 14:01:42,152 - custodian.policy - INFO - policy:aws-lambda-deprecated-runtimes resource:aws.lambda region:us-west-2 count:0 time:2.63
+2025-10-27 14:03:43,985 - custodian.policy - INFO - policy:aws-lambda-deprecated-runtimes resource:aws.lambda region:us-east-1 count:0 time:1.28

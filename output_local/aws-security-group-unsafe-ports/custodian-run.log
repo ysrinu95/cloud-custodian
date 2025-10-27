@@ -1,0 +1,2 @@
+2025-10-27 14:01:37,157 - custodian.policy - INFO - policy:aws-security-group-unsafe-ports resource:aws.security-group region:us-west-2 count:0 time:2.02
+2025-10-27 14:03:40,060 - custodian.policy - INFO - policy:aws-security-group-unsafe-ports resource:aws.security-group region:us-east-1 count:1 time:1.78

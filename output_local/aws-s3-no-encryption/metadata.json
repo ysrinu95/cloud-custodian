@@ -1,0 +1,115 @@
+{
+  "policy": {
+    "name": "aws-s3-no-encryption",
+    "conditions": [
+      {
+        "region": "us-east-1"
+      }
+    ],
+    "resource": "aws.s3",
+    "description": "Notifies of S3 buckets without encyrption enabled\n",
+    "mode": {
+      "type": "periodic",
+      "schedule": "cron(0, 23, ?, *, SUN, *)",
+      "role": "arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole",
+      "tags": {
+        "contact": "ysrinu95@gmail.com",
+        "environment": "{environment}",
+        "repo": "devops/cloud-custodian/c7n"
+      }
+    },
+    "filters": [
+      {
+        "type": "bucket-encryption",
+        "state": false
+      }
+    ],
+    "actions": [
+      {
+        "template": "aws-basic_email.html",
+        "to": [
+          "ysrinu95@gmail.com",
+          "event-owner",
+          "resource-owner"
+        ],
+        "transport": {
+          "type": "sqs",
+          "queue": "https://sqs.us-east-1.amazonaws.com/172327596604/custodian-mailer-queue"
+        },
+        "type": "notify",
+        "subject": "[c7n] [{{ account }}] S3 Buckets Without Encryption Report ({{ region }})",
+        "violation_desc": "S3 buckets without encryption enabled",
+        "action_desc": "No action taken. Encryption should be added to buckets.<br>\n<a href=\"https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucket-encryption.html\">Documentation</a>\n"
+      }
+    ]
+  },
+  "version": "0.9.47",
+  "execution": {
+    "id": "4465a290-eb4c-4a07-b90d-0dec9bef4c59",
+    "start": 1761554034.199169,
+    "end_time": 1761554044.923711,
+    "duration": 10.724542140960693
+  },
+  "config": {
+    "region": "us-east-1",
+    "regions": [
+      "us-east-1"
+    ],
+    "cache": "~/.cache/cloud-custodian.cache",
+    "profile": null,
+    "account_id": "172327596604",
+    "assume_role": null,
+    "session_policy": null,
+    "external_id": null,
+    "log_group": null,
+    "tracer": null,
+    "metrics_enabled": null,
+    "metrics": null,
+    "output_dir": "output_local",
+    "cache_period": 15,
+    "dryrun": true,
+    "authorization_file": null,
+    "subparser": "run",
+    "config": null,
+    "configs": [
+      "c7n\\policies\\s3.yml"
+    ],
+    "policy_filters": [],
+    "resource_types": [],
+    "verbose": null,
+    "quiet": null,
+    "debug": false,
+    "skip_validation": false,
+    "command": "c7n.commands.run",
+    "vars": null
+  },
+  "sys-stats": {},
+  "api-stats": {
+    "s3.ListBuckets": 1,
+    "s3.GetBucketLocation": 4,
+    "s3.GetBucketTagging": 4,
+    "s3.GetBucketPolicy": 4,
+    "s3.GetBucketAcl": 4,
+    "s3.GetBucketReplication": 4,
+    "s3.GetBucketVersioning": 4,
+    "s3.GetBucketWebsite": 4,
+    "s3.GetBucketLogging": 4,
+    "s3.GetBucketNotificationConfiguration": 4,
+    "s3.GetBucketLifecycleConfiguration": 4,
+    "s3.GetBucketEncryption": 4
+  },
+  "metrics": [
+    {
+      "MetricName": "ResourceCount",
+      "Timestamp": "2025-10-27T14:04:04.923711",
+      "Value": 0,
+      "Unit": "Count"
+    },
+    {
+      "MetricName": "ResourceTime",
+      "Timestamp": "2025-10-27T14:04:04.923711",
+      "Value": 10.71549391746521,
+      "Unit": "Seconds"
+    }
+  ]
+}

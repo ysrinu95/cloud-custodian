@@ -1,0 +1,113 @@
+{
+  "policy": {
+    "name": "aws-lambda-outdated-runtimes",
+    "resource": "aws.lambda",
+    "description": "Notifies of Lambda functions using oudated runtimes that will be deprecated soon\n",
+    "mode": {
+      "type": "periodic",
+      "schedule": "cron(0, 23, ?, *, SUN, *)",
+      "role": "arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole",
+      "tags": {
+        "contact": "ysrinu95@gmail.com",
+        "environment": "{environment}",
+        "repo": "devops/cloud-custodian/c7n"
+      }
+    },
+    "filters": [
+      {
+        "type": "value",
+        "key": "Runtime",
+        "value": [
+          "nodejs18.x",
+          "python3.9"
+        ],
+        "op": "in"
+      },
+      {
+        "not": [
+          {
+            "type": "value",
+            "key": "FunctionName",
+            "op": "regex",
+            "value": "(aws-controltower)-\\w+",
+            "value_type": "normalize"
+          }
+        ]
+      }
+    ],
+    "actions": [
+      {
+        "template": "aws-basic_email.html",
+        "to": [
+          "ysrinu95@gmail.com",
+          "event-owner",
+          "resource-owner"
+        ],
+        "transport": {
+          "type": "sqs",
+          "queue": "https://sqs.us-east-1.amazonaws.com/172327596604/custodian-mailer-queue"
+        },
+        "type": "notify",
+        "subject": "[c7n] [{{ account }}] Lambda Functions Using Outdated Runtimes Report ({{ region }})",
+        "violation_desc": "Lambda functions configured to use an outdated runtime that will be deprecated soon",
+        "action_desc": "No action taken. Functions should be updated to the latest runtime.<br>\nThese functions are nearing deprecation within the next 6 months. They will soon no longer receive security patches.<br>\nOnce Phase 2 deprecation ends, they will additionally no longer be able to be updated.<br>\n<a href=\"https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html\">Documentation</a>\n"
+      }
+    ]
+  },
+  "version": "0.9.47",
+  "execution": {
+    "id": "d1b9b3f5-b858-45e0-8172-4669e0f4ac19",
+    "start": 1761554023.9889014,
+    "end_time": 1761554023.9954307,
+    "duration": 0.006529331207275391
+  },
+  "config": {
+    "region": "us-east-1",
+    "regions": [
+      "us-east-1"
+    ],
+    "cache": "~/.cache/cloud-custodian.cache",
+    "profile": null,
+    "account_id": "172327596604",
+    "assume_role": null,
+    "session_policy": null,
+    "external_id": null,
+    "log_group": null,
+    "tracer": null,
+    "metrics_enabled": null,
+    "metrics": null,
+    "output_dir": "output_local",
+    "cache_period": 15,
+    "dryrun": true,
+    "authorization_file": null,
+    "subparser": "run",
+    "config": null,
+    "configs": [
+      "c7n\\policies\\lambda.yml"
+    ],
+    "policy_filters": [],
+    "resource_types": [],
+    "verbose": null,
+    "quiet": null,
+    "debug": false,
+    "skip_validation": false,
+    "command": "c7n.commands.run",
+    "vars": null
+  },
+  "sys-stats": {},
+  "api-stats": {},
+  "metrics": [
+    {
+      "MetricName": "ResourceCount",
+      "Timestamp": "2025-10-27T14:03:43.994418",
+      "Value": 0,
+      "Unit": "Count"
+    },
+    {
+      "MetricName": "ResourceTime",
+      "Timestamp": "2025-10-27T14:03:43.994418",
+      "Value": 0.002473115921020508,
+      "Unit": "Seconds"
+    }
+  ]
+}

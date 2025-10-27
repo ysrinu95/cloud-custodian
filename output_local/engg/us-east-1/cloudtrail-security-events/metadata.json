@@ -1,0 +1,193 @@
+{
+  "policy": {
+    "name": "cloudtrail-security-events",
+    "description": "Monitor AWS CloudTrail for high-risk security events and configuration changes.\nThis policy triggers on critical API calls that may indicate security issues.\n",
+    "resource": "aws.account",
+    "mode": {
+      "type": "cloudtrail",
+      "events": [
+        {
+          "source": "iam.amazonaws.com",
+          "event": "DeleteUserPolicy",
+          "ids": "requestParameters.userName"
+        },
+        {
+          "source": "iam.amazonaws.com",
+          "event": "PutUserPolicy",
+          "ids": "requestParameters.userName"
+        },
+        {
+          "source": "iam.amazonaws.com",
+          "event": "AttachUserPolicy",
+          "ids": "requestParameters.userName"
+        },
+        {
+          "source": "iam.amazonaws.com",
+          "event": "CreateAccessKey",
+          "ids": "requestParameters.userName"
+        },
+        {
+          "source": "iam.amazonaws.com",
+          "event": "DeleteAccountPasswordPolicy",
+          "ids": "userIdentity.accountId"
+        },
+        {
+          "source": "guardduty.amazonaws.com",
+          "event": "DeleteDetector",
+          "ids": "requestParameters.detectorId"
+        },
+        {
+          "source": "cloudtrail.amazonaws.com",
+          "event": "StopLogging",
+          "ids": "requestParameters.name"
+        },
+        {
+          "source": "cloudtrail.amazonaws.com",
+          "event": "DeleteTrail",
+          "ids": "requestParameters.name"
+        },
+        {
+          "source": "config.amazonaws.com",
+          "event": "DeleteConfigRule",
+          "ids": "requestParameters.configRuleName"
+        },
+        {
+          "source": "config.amazonaws.com",
+          "event": "StopConfigurationRecorder",
+          "ids": "requestParameters.configurationRecorderName"
+        },
+        {
+          "source": "ec2.amazonaws.com",
+          "event": "AuthorizeSecurityGroupIngress",
+          "ids": "requestParameters.groupId"
+        },
+        {
+          "source": "ec2.amazonaws.com",
+          "event": "CreateNetworkAclEntry",
+          "ids": "requestParameters.networkAclId"
+        },
+        {
+          "source": "signin.amazonaws.com",
+          "event": "ConsoleLogin",
+          "ids": "userIdentity.accountId"
+        }
+      ],
+      "role": "arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole",
+      "timeout": 300,
+      "tags": {
+        "contact": "srinivasula.yallala@optum.com",
+        "repo": "aikyam-everything-as-code",
+        "terraform": "True",
+        "oid-owned": "True",
+        "aide-id": "UHGWM110-019726",
+        "service-tier": "p1",
+        "application": "cloud-custodian",
+        "managed-by": "jenkins",
+        "environment": "engg",
+        "component": "cloud-custodian-policy",
+        "policy-type": "security-findings",
+        "security-service": "cloudtrail"
+      }
+    },
+    "filters": [
+      {
+        "or": [
+          {
+            "type": "event",
+            "key": "detail.userIdentity.type",
+            "value": "Root"
+          },
+          {
+            "type": "event",
+            "key": "detail.responseElements.ConsoleLogin",
+            "value": "Failure"
+          },
+          {
+            "type": "event",
+            "key": "detail.awsRegion",
+            "op": "not-in",
+            "value": [
+              "us-east-1",
+              "us-east-2",
+              "us-west-2"
+            ]
+          },
+          {
+            "and": [
+              {
+                "type": "event",
+                "key": "detail.eventName",
+                "value": "ConsoleLogin"
+              },
+              {
+                "type": "event",
+                "key": "detail.additionalEventData.MFAUsed",
+                "value": "No"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "actions": [
+      {
+        "type": "notify",
+        "template": "aws-basic_email",
+        "priority_header": "1",
+        "violation_desc": "Critical CloudTrail Security Event Detected",
+        "action_desc": "A critical security event has been detected in CloudTrail logs.\nThis may indicate:\n- Root account usage\n- Failed authentication attempts\n- Security service configuration changes\n- Unauthorized region access\n- Console login without MFA\n\nImmediate investigation required.\n",
+        "to": [
+          "security-operations@optum.com",
+          "security-team@optum.com"
+        ],
+        "transport": {
+          "type": "sqs",
+          "queue": "https://sqs.us-east-1.amazonaws.com/172327596604/custodian-mailer-queue"
+        }
+      }
+    ]
+  },
+  "version": "0.9.47",
+  "execution": {
+    "id": "ccbcb03f-e374-4880-be67-76623b0169e3",
+    "start": 1761553552.90708,
+    "end_time": 1761553554.3723953,
+    "duration": 1.465315341949463
+  },
+  "config": {
+    "region": "us-east-1",
+    "regions": [],
+    "cache": "C:\\Users\\ysrin/.cache/c7n-org\\172327596604-us-east-1.cache",
+    "profile": null,
+    "account_id": "172327596604",
+    "assume_role": "arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole",
+    "session_policy": null,
+    "external_id": null,
+    "log_group": null,
+    "tracer": "default",
+    "metrics_enabled": false,
+    "metrics": null,
+    "output_dir": "output_local\\engg\\us-east-1",
+    "cache_period": 15,
+    "dryrun": true,
+    "authorization_file": null
+  },
+  "sys-stats": {},
+  "api-stats": {
+    "iam.ListAccountAliases": 1
+  },
+  "metrics": [
+    {
+      "MetricName": "ResourceCount",
+      "Timestamp": "2025-10-27T13:55:54.370709",
+      "Value": 1,
+      "Unit": "Count"
+    },
+    {
+      "MetricName": "ResourceTime",
+      "Timestamp": "2025-10-27T13:55:54.370709",
+      "Value": 1.462038516998291,
+      "Unit": "Seconds"
+    }
+  ]
+}

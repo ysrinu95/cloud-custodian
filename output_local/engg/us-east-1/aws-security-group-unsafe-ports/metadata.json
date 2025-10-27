@@ -1,0 +1,175 @@
+{
+  "policy": {
+    "name": "aws-security-group-unsafe-ports",
+    "resource": "aws.security-group",
+    "description": "Notifies of and remediates security group creation with unrestricted access over unsafe ports\n",
+    "mode": {
+      "type": "cloudtrail",
+      "events": [
+        {
+          "source": "ec2.amazonaws.com",
+          "event": "AuthorizeSecurityGroupIngress",
+          "ids": "requestParameters.groupId"
+        },
+        {
+          "source": "ec2.amazonaws.com",
+          "event": "AuthorizeSecurityGroupEgress",
+          "ids": "requestParameters.groupId"
+        },
+        {
+          "source": "ec2.amazonaws.com",
+          "event": "RevokeSecurityGroupEgress",
+          "ids": "requestParameters.groupId"
+        },
+        {
+          "source": "ec2.amazonaws.com",
+          "event": "RevokeSecurityGroupIngress",
+          "ids": "requestParameters.groupId"
+        }
+      ],
+      "role": "arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole",
+      "tags": {
+        "contact": "ysrinu95@gmail.com",
+        "environment": "engg",
+        "repo": "devops/cloud-custodian/c7n"
+      }
+    },
+    "filters": [
+      {
+        "or": [
+          {
+            "type": "ingress",
+            "Ports": [
+              3389,
+              20,
+              23,
+              110,
+              143,
+              3306,
+              8080,
+              1433,
+              9200,
+              9300,
+              25,
+              445,
+              135,
+              21,
+              1434,
+              4333,
+              5432,
+              5500,
+              5601,
+              22,
+              3000,
+              5000,
+              8088,
+              8888
+            ],
+            "Cidr": {
+              "value": "0.0.0.0/0",
+              "key": "CidrIp"
+            }
+          },
+          {
+            "type": "ingress",
+            "Ports": [
+              3389,
+              20,
+              23,
+              110,
+              143,
+              3306,
+              8080,
+              1433,
+              9200,
+              9300,
+              25,
+              445,
+              135,
+              21,
+              1434,
+              4333,
+              5432,
+              5500,
+              5601,
+              22,
+              3000,
+              5000,
+              8088,
+              8888
+            ],
+            "CidrV6": {
+              "value": "::/0"
+            }
+          }
+        ]
+      }
+    ],
+    "actions": [
+      {
+        "type": "remove-permissions",
+        "ingress": "matched"
+      },
+      {
+        "template": "aws-basic_email.html",
+        "to": [
+          "ysrinu95@gmail.com",
+          "event-owner",
+          "resource-owner"
+        ],
+        "transport": {
+          "type": "sqs",
+          "queue": "https://sqs.us-east-1.amazonaws.com/172327596604/custodian-mailer-queue"
+        },
+        "type": "notify",
+        "priority_header": 1,
+        "subject": "[c7n] [{{ account }}] Open Security Group Rule Created ({{ region }})",
+        "violation_desc": "Security group with rules open to the world",
+        "action_desc": "Actions taken: The violating security group rule has been removed as it typically allows \ndirect incoming public internet traffic access to your resource. This violates AWS \nsecurity best practice. <br>          \n<a href=\"https://docs.aws.amazon.com/securityhub/latest/userguide/securityhub-standards-fsbp-controls.html#ec2-19-remediation\">Documentation</a> \n"
+      }
+    ]
+  },
+  "version": "0.9.47",
+  "execution": {
+    "id": "4cf46b1c-b9c1-4d6d-82af-7a07627ff8be",
+    "start": 1761553568.996469,
+    "end_time": 1761553571.3496974,
+    "duration": 2.3532283306121826
+  },
+  "config": {
+    "region": "us-east-1",
+    "regions": [],
+    "cache": "C:\\Users\\ysrin/.cache/c7n-org\\172327596604-us-east-1.cache",
+    "profile": null,
+    "account_id": "172327596604",
+    "assume_role": "arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole",
+    "session_policy": null,
+    "external_id": null,
+    "log_group": null,
+    "tracer": "default",
+    "metrics_enabled": false,
+    "metrics": null,
+    "output_dir": "output_local\\engg\\us-east-1",
+    "cache_period": 15,
+    "dryrun": true,
+    "authorization_file": null
+  },
+  "sys-stats": {},
+  "api-stats": {
+    "ec2.DescribeSecurityGroups": 1
+  },
+  "metrics": [
+    {
+      "MetricName": "ResourceCount",
+      "Timestamp": "2025-10-27T13:56:11.345951",
+      "Value": 1,
+      "Unit": "Count"
+    },
+    {
+      "MetricName": "ResourceTime",
+      "Timestamp": "2025-10-27T13:56:11.345951",
+      "Value": 2.3494820594787598,
+      "Unit": "Seconds"
+    }
+  ]
+}
