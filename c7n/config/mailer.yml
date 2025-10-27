@@ -1,7 +1,7 @@
 # mailer queue settings
-queue_url: https://sqs.us-west-2.amazonaws.com/172327596604/c7n-mailer-test
-role: arn:aws:iam::172327596604:role/CloudCustodian-Lambda-ExecutionRole
-region: us-west-2
+queue_url: https://sqs.us-east-1.amazonaws.com/172327596604/custodian-mailer-queue
+role: arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole
+region: us-east-1
 
 # lambda function settings
 lambda_tags:
