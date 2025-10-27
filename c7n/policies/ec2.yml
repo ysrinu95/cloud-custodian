@@ -50,7 +50,7 @@ policies:
         key: detail.requestParameters.networkInterfaceSet.items[].associatePublicIpAddress
         value: true
     actions:
-      - type: stop
+      - type: terminate
         force: true
       - type: notify
         <<: *email-notify

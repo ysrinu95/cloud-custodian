@@ -1,0 +1,68 @@
+policies:
+  # ============================================================================
+  # AWS GuardDuty Findings Policy
+  # ============================================================================
+  - name: guardduty-high-severity-findings
+    description: |
+      Respond to AWS GuardDuty high and critical severity findings in real-time.
+      This policy triggers on GuardDuty findings and takes automated remediation actions.
+    resource: aws.guardduty-finding
+    mode:
+      type: cloudtrail
+      events:
+        - source: aws.guardduty
+          event: CreateFinding
+          ids: "detail.id"
+      role: arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole
+      timeout: 300
+      tags:
+        contact: srinivasula.yallala@optum.com
+        repo: aikyam-everything-as-code
+        terraform: "True"
+        oid-owned: "True"
+        aide-id: UHGWM110-019726
+        service-tier: p1
+        application: cloud-custodian
+        managed-by: jenkins
+        environment: engg
+        component: cloud-custodian-policy
+        policy-type: security-findings
+        security-service: guardduty
+    filters:
+      # Only act on high and critical severity findings
+      - type: value
+        key: severity
+        op: gte
+        value: 7.0
+      # Filter specific threat types
+      - or:
+        - type: value
+          key: type
+          op: in
+          value:
+            - "UnauthorizedAccess:EC2/SSHBruteForce"
+            - "UnauthorizedAccess:EC2/RDPBruteForce"
+            - "CryptoCurrency:EC2/BitcoinTool.B!DNS"
+            - "Backdoor:EC2/C&CActivity.B!DNS"
+            - "Trojan:EC2/DNSDataExfiltration"
+            - "UnauthorizedAccess:IAMUser/MaliciousIPCaller.Custom"
+    actions:
+      # Tag the finding for tracking
+      - type: post-finding
+        compliance_status: FAILED
+        severity_label: HIGH
+        types:
+          - "Software and Configuration Checks/AWS Security Best Practices"
+      # Send notification via email
+      - type: notify
+        template: aws-basic_email
+        priority_header: "1"
+        violation_desc: "GuardDuty High Severity Finding Detected"
+        action_desc: |
+          A high or critical severity GuardDuty finding has been detected.
+          Immediate investigation and remediation required.
+        to:
+          - security-team@optum.com
+        transport:
+          type: sqs
+          queue: https://sqs.us-east-1.amazonaws.com/172327596604/custodian-mailer-queue
