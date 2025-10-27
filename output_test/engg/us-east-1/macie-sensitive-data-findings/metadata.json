@@ -1,0 +1,118 @@
+{
+  "policy": {
+    "name": "macie-sensitive-data-findings",
+    "description": "Respond to AWS Macie sensitive data discovery findings in S3 buckets.\nThis policy triggers when Macie detects PII, credentials, or sensitive data.\n",
+    "resource": "aws.s3",
+    "mode": {
+      "type": "cloudtrail",
+      "events": [
+        {
+          "source": "macie2.amazonaws.com",
+          "event": "ClassificationResult",
+          "ids": "detail.resourcesAffected.s3Bucket.name"
+        }
+      ],
+      "timeout": 300,
+      "tags": {
+        "contact": "srinivasula.yallala@optum.com",
+        "repo": "aikyam-everything-as-code",
+        "terraform": "True",
+        "oid-owned": "True",
+        "aide-id": "UHGWM110-019726",
+        "service-tier": "p1",
+        "application": "cloud-custodian",
+        "managed-by": "jenkins",
+        "environment": "engg",
+        "component": "cloud-custodian-policy",
+        "policy-type": "security-findings",
+        "security-service": "macie"
+      }
+    },
+    "filters": [
+      {
+        "type": "event",
+        "key": "detail.severity.score",
+        "op": "gte",
+        "value": 7
+      }
+    ],
+    "actions": [
+      {
+        "type": "set-bucket-encryption",
+        "crypto": "AES256"
+      },
+      {
+        "type": "toggle-versioning",
+        "enabled": true
+      },
+      {
+        "type": "set-public-block",
+        "BlockPublicAcls": true,
+        "BlockPublicPolicy": true,
+        "IgnorePublicAcls": true,
+        "RestrictPublicBuckets": true
+      },
+      {
+        "type": "tag",
+        "key": "MacieFinding",
+        "value": "SensitiveDataDetected"
+      },
+      {
+        "type": "notify",
+        "template": "aws-basic_email",
+        "priority_header": "1",
+        "violation_desc": "Macie Sensitive Data Finding",
+        "action_desc": "AWS Macie has detected sensitive data (PII, credentials, financial info) in an S3 bucket.\nAutomatic remediation applied: encryption enabled, versioning enabled, public access blocked.\n",
+        "to": [
+          "data-security-team@optum.com",
+          "compliance-team@optum.com"
+        ],
+        "transport": {
+          "type": "sqs",
+          "queue": "https://sqs.us-east-1.amazonaws.com/172327596604/custodian-mailer-queue"
+        }
+      }
+    ]
+  },
+  "version": "0.9.47",
+  "execution": {
+    "id": "7fa3f12e-7b81-43e2-9b5c-0e88ac54fdd0",
+    "start": 1761547692.0139055,
+    "end_time": 1761547692.0149345,
+    "duration": 0.0010290145874023438
+  },
+  "config": {
+    "region": "us-east-1",
+    "regions": [],
+    "cache": "C:\\Users\\ysrin/.cache/c7n-org\\172327596604-us-east-1.cache",
+    "profile": null,
+    "account_id": "172327596604",
+    "assume_role": "arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole",
+    "session_policy": null,
+    "external_id": null,
+    "log_group": null,
+    "tracer": "default",
+    "metrics_enabled": false,
+    "metrics": null,
+    "output_dir": "output_test\\engg\\us-east-1",
+    "cache_period": 15,
+    "dryrun": true,
+    "authorization_file": null
+  },
+  "sys-stats": {},
+  "api-stats": {},
+  "metrics": [
+    {
+      "MetricName": "ResourceCount",
+      "Timestamp": "2025-10-27T12:18:12.014934",
+      "Value": 4,
+      "Unit": "Count"
+    },
+    {
+      "MetricName": "ResourceTime",
+      "Timestamp": "2025-10-27T12:18:12.014934",
+      "Value": 0.0,
+      "Unit": "Seconds"
+    }
+  ]
+}

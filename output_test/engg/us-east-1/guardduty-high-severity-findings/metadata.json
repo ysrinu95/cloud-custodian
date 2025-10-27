@@ -1,0 +1,126 @@
+{
+  "policy": {
+    "name": "guardduty-high-severity-findings",
+    "description": "Respond to AWS GuardDuty high and critical severity findings in real-time.\nThis policy triggers on GuardDuty findings and takes automated remediation actions.\n",
+    "resource": "aws.guardduty-finding",
+    "mode": {
+      "type": "cloudtrail",
+      "events": [
+        {
+          "source": "aws.guardduty",
+          "event": "CreateFinding",
+          "ids": "detail.id"
+        }
+      ],
+      "timeout": 300,
+      "tags": {
+        "contact": "srinivasula.yallala@optum.com",
+        "repo": "aikyam-everything-as-code",
+        "terraform": "True",
+        "oid-owned": "True",
+        "aide-id": "UHGWM110-019726",
+        "service-tier": "p1",
+        "application": "cloud-custodian",
+        "managed-by": "jenkins",
+        "environment": "engg",
+        "component": "cloud-custodian-policy",
+        "policy-type": "security-findings",
+        "security-service": "guardduty"
+      }
+    },
+    "filters": [
+      {
+        "type": "value",
+        "key": "severity",
+        "op": "gte",
+        "value": 7.0
+      },
+      {
+        "or": [
+          {
+            "type": "value",
+            "key": "type",
+            "op": "in",
+            "value": [
+              "UnauthorizedAccess:EC2/SSHBruteForce",
+              "UnauthorizedAccess:EC2/RDPBruteForce",
+              "CryptoCurrency:EC2/BitcoinTool.B!DNS",
+              "Backdoor:EC2/C&CActivity.B!DNS",
+              "Trojan:EC2/DNSDataExfiltration",
+              "UnauthorizedAccess:IAMUser/MaliciousIPCaller.Custom"
+            ]
+          }
+        ]
+      }
+    ],
+    "actions": [
+      {
+        "type": "post-finding",
+        "compliance_status": "FAILED",
+        "severity_label": "HIGH",
+        "types": [
+          "Software and Configuration Checks/AWS Security Best Practices"
+        ]
+      },
+      {
+        "type": "notify",
+        "template": "aws-guardduty-finding_slack",
+        "priority_header": "1",
+        "slack_template": "slack",
+        "violation_desc": "GuardDuty High Severity Finding Detected",
+        "action_desc": "A high or critical severity GuardDuty finding has been detected.\nImmediate investigation and remediation required.\n",
+        "to": [
+          "security-team@optum.com",
+          "slack://security-alerts"
+        ],
+        "transport": {
+          "type": "sqs",
+          "queue": "https://sqs.us-east-1.amazonaws.com/172327596604/custodian-mailer-queue"
+        }
+      }
+    ]
+  },
+  "version": "0.9.47",
+  "execution": {
+    "id": "46808bfc-40f3-4277-858a-82f71bc05234",
+    "start": 1761547686.1808403,
+    "end_time": 1761547689.0888758,
+    "duration": 2.9080355167388916
+  },
+  "config": {
+    "region": "us-east-1",
+    "regions": [],
+    "cache": "C:\\Users\\ysrin/.cache/c7n-org\\172327596604-us-east-1.cache",
+    "profile": null,
+    "account_id": "172327596604",
+    "assume_role": "arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole",
+    "session_policy": null,
+    "external_id": null,
+    "log_group": null,
+    "tracer": "default",
+    "metrics_enabled": false,
+    "metrics": null,
+    "output_dir": "output_test\\engg\\us-east-1",
+    "cache_period": 15,
+    "dryrun": true,
+    "authorization_file": null
+  },
+  "sys-stats": {},
+  "api-stats": {
+    "guardduty.ListDetectors": 1
+  },
+  "metrics": [
+    {
+      "MetricName": "ResourceCount",
+      "Timestamp": "2025-10-27T12:18:09.088875",
+      "Value": 0,
+      "Unit": "Count"
+    },
+    {
+      "MetricName": "ResourceTime",
+      "Timestamp": "2025-10-27T12:18:09.088875",
+      "Value": 1.283536434173584,
+      "Unit": "Seconds"
+    }
+  ]
+}

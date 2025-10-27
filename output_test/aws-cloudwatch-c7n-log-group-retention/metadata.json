@@ -1,0 +1,105 @@
+{
+  "policy": {
+    "name": "aws-cloudwatch-c7n-log-group-retention",
+    "resource": "aws.log-group",
+    "description": "Notifies and sets the log group retention for c7n log groups\n",
+    "mode": {
+      "type": "periodic",
+      "schedule": "cron(0, 23, ?, *, SUN, *)",
+      "tags": {
+        "contact": "ysrinu95@gmail.com",
+        "environment": "{environment}",
+        "repo": "devops/cloud-custodian/c7n"
+      }
+    },
+    "filters": [
+      {
+        "type": "value",
+        "key": "logGroupName",
+        "op": "regex",
+        "value": "^/aws/lambda/custodian-"
+      },
+      {
+        "retentionInDays": "absent"
+      }
+    ],
+    "actions": [
+      {
+        "type": "retention",
+        "days": 60
+      },
+      {
+        "template": "aws-basic_email.html",
+        "to": [
+          "ysrinu95@gmail.com",
+          "event-owner",
+          "resource-owner"
+        ],
+        "transport": {
+          "type": "sqs",
+          "queue": "https://sqs.us-east-1.amazonaws.com/172327596604/custodian-mailer-queue"
+        },
+        "type": "notify",
+        "subject": "[c7n] [{{ account }}] CloudWatch c7n Log Group Retention Updated ({{ region }})",
+        "violation_desc": "c7n log groups with no retention set",
+        "action_desc": "Log retention has been updated to 60 days.\n"
+      }
+    ]
+  },
+  "version": "0.9.47",
+  "execution": {
+    "id": "2993d64e-812d-4196-9b9a-06934fe579ab",
+    "start": 1761547267.037881,
+    "end_time": 1761547267.0419276,
+    "duration": 0.00404667854309082
+  },
+  "config": {
+    "region": "us-east-1",
+    "regions": [
+      "us-east-1"
+    ],
+    "cache": "~/.cache/cloud-custodian.cache",
+    "profile": null,
+    "account_id": "172327596604",
+    "assume_role": null,
+    "session_policy": null,
+    "external_id": null,
+    "log_group": null,
+    "tracer": null,
+    "metrics_enabled": null,
+    "metrics": null,
+    "output_dir": "output_test",
+    "cache_period": 15,
+    "dryrun": true,
+    "authorization_file": null,
+    "subparser": "run",
+    "config": null,
+    "configs": [
+      "c7n\\policies\\cloudwatch.yml"
+    ],
+    "policy_filters": [],
+    "resource_types": [],
+    "verbose": null,
+    "quiet": null,
+    "debug": false,
+    "skip_validation": false,
+    "command": "c7n.commands.run",
+    "vars": null
+  },
+  "sys-stats": {},
+  "api-stats": {},
+  "metrics": [
+    {
+      "MetricName": "ResourceCount",
+      "Timestamp": "2025-10-27T12:11:07.041927",
+      "Value": 3,
+      "Unit": "Count"
+    },
+    {
+      "MetricName": "ResourceTime",
+      "Timestamp": "2025-10-27T12:11:07.041927",
+      "Value": 0.0,
+      "Unit": "Seconds"
+    }
+  ]
+}

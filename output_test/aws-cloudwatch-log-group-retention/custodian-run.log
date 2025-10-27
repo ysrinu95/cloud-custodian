@@ -1,0 +1,1 @@
+2025-10-27 12:11:07,059 - custodian.policy - INFO - policy:aws-cloudwatch-log-group-retention resource:aws.log-group region:us-east-1 count:3 time:0.00

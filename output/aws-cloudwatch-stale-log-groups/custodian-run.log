@@ -1,0 +1,1 @@
+2025-10-27 12:10:05,301 - custodian.policy - INFO - policy:aws-cloudwatch-stale-log-groups resource:aws.log-group region:us-east-1 count:0 time:5.12

@@ -1,0 +1,73 @@
+{
+  "policy": {
+    "name": "aws-cloudwatch-stale-log-groups",
+    "resource": "aws.log-group",
+    "description": "Test CloudWatch log groups policy",
+    "filters": [
+      {
+        "type": "last-write",
+        "days": 365
+      }
+    ]
+  },
+  "version": "0.9.47",
+  "execution": {
+    "id": "a3af6639-e9f7-4026-9a75-8d2994b8074d",
+    "start": 1761547200.1714847,
+    "end_time": 1761547205.3016367,
+    "duration": 5.130151987075806
+  },
+  "config": {
+    "region": "us-east-1",
+    "regions": [
+      "us-east-1"
+    ],
+    "cache": "~/.cache/cloud-custodian.cache",
+    "profile": null,
+    "account_id": "172327596604",
+    "assume_role": null,
+    "session_policy": null,
+    "external_id": null,
+    "log_group": null,
+    "tracer": null,
+    "metrics_enabled": null,
+    "metrics": null,
+    "output_dir": "output",
+    "cache_period": 15,
+    "dryrun": true,
+    "authorization_file": null,
+    "subparser": "run",
+    "config": null,
+    "configs": [
+      "test_cloudwatch.yml"
+    ],
+    "policy_filters": [],
+    "resource_types": [],
+    "verbose": null,
+    "quiet": null,
+    "debug": false,
+    "skip_validation": false,
+    "command": "c7n.commands.run",
+    "vars": null
+  },
+  "sys-stats": {},
+  "api-stats": {
+    "logs.DescribeLogGroups": 1,
+    "tagging.GetResources": 1,
+    "logs.DescribeLogStreams": 4
+  },
+  "metrics": [
+    {
+      "MetricName": "ResourceCount",
+      "Timestamp": "2025-10-27T12:10:05.301636",
+      "Value": 0,
+      "Unit": "Count"
+    },
+    {
+      "MetricName": "ResourceTime",
+      "Timestamp": "2025-10-27T12:10:05.301636",
+      "Value": 5.121990442276001,
+      "Unit": "Seconds"
+    }
+  ]
+}

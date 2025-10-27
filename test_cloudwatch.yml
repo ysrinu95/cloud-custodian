@@ -1,0 +1,7 @@
+policies:
+  - name: aws-cloudwatch-stale-log-groups
+    resource: aws.log-group
+    description: Test CloudWatch log groups policy
+    filters:
+      - type: last-write
+        days: 365

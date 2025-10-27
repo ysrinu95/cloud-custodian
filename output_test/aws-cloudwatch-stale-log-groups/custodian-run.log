@@ -1,0 +1,2 @@
+2025-10-27 12:10:54,534 - custodian.policy - INFO - policy:aws-cloudwatch-stale-log-groups resource:aws.log-group region:us-east-1 count:0 time:2.35
+2025-10-27 12:11:07,033 - custodian.policy - INFO - policy:aws-cloudwatch-stale-log-groups resource:aws.log-group region:us-east-1 count:0 time:2.27

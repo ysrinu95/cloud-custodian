@@ -30,7 +30,7 @@ done
 
 for FILE in $policy_dir/*.yml; do
   echo "running policy file: $FILE"
-  c7n-org run --cache-period=0 -c $config -s $output_dir $account -u $FILE $dryrun
+  c7n-org run -c $config -u $FILE -s $output_dir $account $dryrun
 done
 
 # local

@@ -1,0 +1,120 @@
+{
+  "policy": {
+    "name": "iam-access-analyzer-external-access",
+    "description": "Respond to IAM Access Analyzer findings indicating external access to resources.\nThis policy triggers when resources are shared with external principals.\n",
+    "resource": "aws.access-analyzer-finding",
+    "mode": {
+      "type": "cloudtrail",
+      "events": [
+        {
+          "source": "access-analyzer.amazonaws.com",
+          "event": "CreateFinding",
+          "ids": "detail.id"
+        }
+      ],
+      "timeout": 300,
+      "tags": {
+        "contact": "srinivasula.yallala@optum.com",
+        "repo": "aikyam-everything-as-code",
+        "terraform": "True",
+        "oid-owned": "True",
+        "aide-id": "UHGWM110-019726",
+        "service-tier": "p1",
+        "application": "cloud-custodian",
+        "managed-by": "jenkins",
+        "environment": "engg",
+        "component": "cloud-custodian-policy",
+        "policy-type": "security-findings",
+        "security-service": "access-analyzer"
+      }
+    },
+    "filters": [
+      {
+        "type": "value",
+        "key": "status",
+        "value": "ACTIVE"
+      },
+      {
+        "type": "value",
+        "key": "resourceType",
+        "op": "in",
+        "value": [
+          "AWS::S3::Bucket",
+          "AWS::IAM::Role",
+          "AWS::KMS::Key",
+          "AWS::Lambda::Function",
+          "AWS::SQS::Queue"
+        ]
+      }
+    ],
+    "actions": [
+      {
+        "type": "post-finding",
+        "compliance_status": "WARNING",
+        "types": [
+          "Software and Configuration Checks/AWS Security Best Practices"
+        ]
+      },
+      {
+        "type": "notify",
+        "template": "aws-iam-user_slack",
+        "priority_header": "2",
+        "slack_template": "slack",
+        "violation_desc": "IAM Access Analyzer External Access Detected",
+        "action_desc": "IAM Access Analyzer has detected that a resource is accessible by an external principal.\nReview the finding to determine if this access is intended.\n",
+        "to": [
+          "iam-team@optum.com",
+          "security-team@optum.com",
+          "slack://iam-alerts"
+        ],
+        "transport": {
+          "type": "sqs",
+          "queue": "https://sqs.us-east-1.amazonaws.com/172327596604/custodian-mailer-queue"
+        }
+      }
+    ]
+  },
+  "version": "0.9.47",
+  "execution": {
+    "id": "af3070ea-26bb-4a8d-aa28-35537ac9da90",
+    "start": 1761547692.01747,
+    "end_time": 1761547693.2145612,
+    "duration": 1.1970913410186768
+  },
+  "config": {
+    "region": "us-east-1",
+    "regions": [],
+    "cache": "C:\\Users\\ysrin/.cache/c7n-org\\172327596604-us-east-1.cache",
+    "profile": null,
+    "account_id": "172327596604",
+    "assume_role": "arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole",
+    "session_policy": null,
+    "external_id": null,
+    "log_group": null,
+    "tracer": "default",
+    "metrics_enabled": false,
+    "metrics": null,
+    "output_dir": "output_test\\engg\\us-east-1",
+    "cache_period": 15,
+    "dryrun": true,
+    "authorization_file": null
+  },
+  "sys-stats": {},
+  "api-stats": {
+    "access-analyzer.ListAnalyzers": 1
+  },
+  "metrics": [
+    {
+      "MetricName": "ResourceCount",
+      "Timestamp": "2025-10-27T12:18:13.214561",
+      "Value": 0,
+      "Unit": "Count"
+    },
+    {
+      "MetricName": "ResourceTime",
+      "Timestamp": "2025-10-27T12:18:13.214561",
+      "Value": 1.1970913410186768,
+      "Unit": "Seconds"
+    }
+  ]
+}

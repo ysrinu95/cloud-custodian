@@ -49,7 +49,7 @@ for FILE in $policy_dir/*.yml; do
     #  policy names are unique and will only exist once
     if grep -Fq $policy $FILE; then
       echo "$policy exists in this policy file, deploying..."
-      c7n-org run --cache-period=0 -c $config -s $output_dir $account -u $FILE -p $policy $dryrun
+      c7n-org run -c $config -u $FILE -s $output_dir $account -p $policy $dryrun
     fi
   done
 done

@@ -1,0 +1,87 @@
+{
+  "policy": {
+    "name": "aws-s3-public-access",
+    "conditions": [
+      {
+        "region": "us-east-1"
+      }
+    ],
+    "resource": "aws.s3",
+    "description": "Notifies of S3 buckets that do not have public access fully restricted\n",
+    "mode": {
+      "type": "periodic",
+      "schedule": "cron(0, 23, ?, *, SUN, *)",
+      "tags": {
+        "contact": "ysrinu95@gmail.com",
+        "environment": "engg",
+        "repo": "devops/cloud-custodian/c7n"
+      }
+    },
+    "filters": [
+      {
+        "type": "check-public-block"
+      }
+    ],
+    "actions": [
+      {
+        "template": "aws-basic_email.html",
+        "to": [
+          "ysrinu95@gmail.com",
+          "event-owner",
+          "resource-owner"
+        ],
+        "transport": {
+          "type": "sqs",
+          "queue": "https://sqs.us-east-1.amazonaws.com/172327596604/custodian-mailer-queue"
+        },
+        "type": "notify",
+        "subject": "[c7n] [{{ account }}] S3 Buckets Potential Public Access Report ({{ region }})",
+        "violation_desc": "S3 buckets with potential public access",
+        "action_desc": "No action taken. S3 bucket public access should be fully restricted.<br>\n<a href=\"https://docs.aws.amazon.com/AmazonS3/latest/userguide/access-control-block-public-access.html\">Documentation</a>\n"
+      }
+    ]
+  },
+  "version": "0.9.47",
+  "execution": {
+    "id": "ef23b042-7bb1-4abe-a11f-3bc14bd293bc",
+    "start": 1761547674.292766,
+    "end_time": 1761547678.648533,
+    "duration": 4.355767011642456
+  },
+  "config": {
+    "region": "us-east-1",
+    "regions": [],
+    "cache": "C:\\Users\\ysrin/.cache/c7n-org\\172327596604-us-east-1.cache",
+    "profile": null,
+    "account_id": "172327596604",
+    "assume_role": "arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole",
+    "session_policy": null,
+    "external_id": null,
+    "log_group": null,
+    "tracer": "default",
+    "metrics_enabled": false,
+    "metrics": null,
+    "output_dir": "output_test\\engg\\us-east-1",
+    "cache_period": 15,
+    "dryrun": true,
+    "authorization_file": null
+  },
+  "sys-stats": {},
+  "api-stats": {
+    "s3.GetPublicAccessBlock": 4
+  },
+  "metrics": [
+    {
+      "MetricName": "ResourceCount",
+      "Timestamp": "2025-10-27T12:17:58.648533",
+      "Value": 0,
+      "Unit": "Count"
+    },
+    {
+      "MetricName": "ResourceTime",
+      "Timestamp": "2025-10-27T12:17:58.648533",
+      "Value": 4.355767011642456,
+      "Unit": "Seconds"
+    }
+  ]
+}

@@ -1513,7 +1513,7 @@ jobs:
             name: engg
             regions:
             - us-east-1
-            role: arn:aws:iam::172327596604:role/CloudCustodian-Lambda-ExecutionRole
+            role: arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole
             vars:
               environment: engg
           EOF
@@ -1543,7 +1543,7 @@ jobs:
                 echo "  📄 Found in: $found_file"
                 echo "  🚀 Running dry-run against account: engg"
                 
-                if c7n-org run --cache-period=0 -c validation-accounts.yml -s ../artifacts/validation-dryrun -u "$found_file" -p "$policy" --dryrun; then
+                if c7n-org run -c validation-accounts.yml -u "$found_file" -s ../artifacts/validation-dryrun -p "$policy" --dryrun; then
                   echo "  ✅ Dry-run completed successfully for: $policy"
                   tested_count=$((tested_count + 1))
                 else

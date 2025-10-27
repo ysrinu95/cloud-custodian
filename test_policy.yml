@@ -1,0 +1,7 @@
+policies:
+  - name: test-s3-policy
+    resource: aws.s3
+    description: Simple test policy to list S3 buckets
+    filters:
+      - type: bucket-encryption
+        state: false
