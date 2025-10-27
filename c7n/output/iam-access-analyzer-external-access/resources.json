@@ -1,0 +1,48 @@
+[
+  {
+    "id": "e7d052c4-f66a-42fc-ab3e-cb694c47ad31",
+    "principal": {
+      "Federated": "arn:aws:iam::172327596604:oidc-provider/token.actions.githubusercontent.com"
+    },
+    "action": [
+      "sts:AssumeRoleWithWebIdentity"
+    ],
+    "resource": "arn:aws:iam::172327596604:role/GitHubActions-CloudCustodian-Role",
+    "isPublic": false,
+    "resourceType": "AWS::IAM::Role",
+    "condition": {},
+    "createdAt": "2025-10-27T09:46:44.060000+00:00",
+    "analyzedAt": "2025-10-27T09:46:44.060000+00:00",
+    "updatedAt": "2025-10-27T09:46:44.060000+00:00",
+    "status": "ACTIVE",
+    "resourceOwnerAccount": "172327596604",
+    "resourceControlPolicyRestriction": "NOT_APPLICABLE",
+    "c7n:MatchedFilters": [
+      "status",
+      "resourceType"
+    ]
+  },
+  {
+    "id": "272a1e24-2fb8-4ce9-a979-952c55baec08",
+    "principal": {
+      "Federated": "arn:aws:iam::172327596604:oidc-provider/token.actions.githubusercontent.com"
+    },
+    "action": [
+      "sts:AssumeRole"
+    ],
+    "resource": "arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole",
+    "isPublic": false,
+    "resourceType": "AWS::IAM::Role",
+    "condition": {},
+    "createdAt": "2025-10-27T09:46:44.060000+00:00",
+    "analyzedAt": "2025-10-27T09:46:44.060000+00:00",
+    "updatedAt": "2025-10-27T09:46:44.060000+00:00",
+    "status": "ACTIVE",
+    "resourceOwnerAccount": "172327596604",
+    "resourceControlPolicyRestriction": "NOT_APPLICABLE",
+    "c7n:MatchedFilters": [
+      "status",
+      "resourceType"
+    ]
+  }
+]

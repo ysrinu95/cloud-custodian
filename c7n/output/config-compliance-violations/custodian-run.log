@@ -1,0 +1,4 @@
+2025-10-27 15:15:52,677 - custodian.policy - INFO - policy:config-compliance-violations resource:aws.config-rule region:us-west-2 count:0 time:1.37
+2025-10-27 16:25:27,125 - custodian.policy - INFO - policy:config-compliance-violations resource:aws.config-rule region:us-east-1 count:0 time:1.32
+2025-10-27 16:26:09,878 - custodian.policy - INFO - Provisioning policy lambda: config-compliance-violations region: us-east-1
+2025-10-27 16:26:11,174 - custodian.serverless - INFO - Publishing custodian policy lambda function custodian-config-compliance-violations

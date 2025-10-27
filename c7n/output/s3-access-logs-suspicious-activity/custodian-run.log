@@ -1,0 +1,4 @@
+2025-10-27 15:16:00,744 - custodian.policy - INFO - policy:s3-access-logs-suspicious-activity resource:aws.s3 region:us-west-2 count:0 time:0.00
+2025-10-27 16:25:36,984 - custodian.policy - INFO - policy:s3-access-logs-suspicious-activity resource:aws.s3 region:us-east-1 count:0 time:0.00
+2025-10-27 16:27:06,717 - custodian.policy - INFO - Provisioning policy lambda: s3-access-logs-suspicious-activity region: us-east-1
+2025-10-27 16:27:07,967 - custodian.serverless - INFO - Publishing custodian policy lambda function custodian-s3-access-logs-suspicious-activity

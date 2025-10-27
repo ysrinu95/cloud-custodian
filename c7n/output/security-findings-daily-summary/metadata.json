@@ -1,0 +1,102 @@
+{
+  "policy": {
+    "name": "security-findings-daily-summary",
+    "description": "Daily summary of all security findings from various AWS security services.\nThis provides a consolidated view of the security posture.\n",
+    "resource": "aws.account",
+    "mode": {
+      "type": "periodic",
+      "schedule": "cron(0 23 ? * SUN *)",
+      "role": "arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole",
+      "tags": {
+        "contact": "srinivasula.yallala@optum.com",
+        "repo": "aikyam-everything-as-code",
+        "terraform": "True",
+        "oid-owned": "True",
+        "aide-id": "UHGWM110-019726",
+        "service-tier": "p1",
+        "application": "cloud-custodian",
+        "managed-by": "jenkins",
+        "environment": "engg",
+        "component": "cloud-custodian-policy",
+        "policy-type": "security-findings",
+        "security-service": "summary",
+        "custodian-info": "mode=periodic:version=0.9.47"
+      }
+    },
+    "actions": [
+      {
+        "type": "invoke-lambda",
+        "function": "custodian-security-findings-aggregator",
+        "async": false
+      },
+      {
+        "type": "notify",
+        "template": "aws-basic_email",
+        "priority_header": "3",
+        "subject": "Daily Security Findings Summary - {account}",
+        "violation_desc": "Daily Security Findings Report",
+        "action_desc": "This is your daily summary of security findings from:\n- AWS GuardDuty\n- AWS Config Rules\n- AWS Security Hub\n- AWS Macie\n- IAM Access Analyzer\n- S3 Access Logs Analysis\n- CloudTrail Security Events\n- EC2 Public Instance Detection\n\nReview the findings and take appropriate action.\n",
+        "to": [
+          "security-team@optum.com",
+          "compliance-team@optum.com"
+        ],
+        "transport": {
+          "type": "sqs",
+          "queue": "https://sqs.us-east-1.amazonaws.com/172327596604/custodian-mailer-queue"
+        }
+      }
+    ]
+  },
+  "version": "0.9.47",
+  "execution": {
+    "id": "48f3a786-8560-4558-b14a-405d2099ca9f",
+    "start": 1761562681.8340008,
+    "end_time": 1761562695.8730989,
+    "duration": 14.039098024368286
+  },
+  "config": {
+    "region": "us-east-1",
+    "regions": [
+      "us-east-1"
+    ],
+    "cache": "~/.cache/cloud-custodian.cache",
+    "profile": null,
+    "account_id": "172327596604",
+    "assume_role": null,
+    "session_policy": null,
+    "external_id": null,
+    "log_group": null,
+    "tracer": null,
+    "metrics_enabled": null,
+    "metrics": null,
+    "output_dir": "output",
+    "cache_period": 15,
+    "dryrun": false,
+    "authorization_file": null,
+    "subparser": "run",
+    "config": null,
+    "configs": [
+      "policies/security-findings.yml"
+    ],
+    "policy_filters": [],
+    "resource_types": [],
+    "verbose": null,
+    "quiet": null,
+    "debug": false,
+    "skip_validation": false,
+    "command": "c7n.commands.run",
+    "vars": null
+  },
+  "sys-stats": {},
+  "api-stats": {
+    "lambda.GetFunction": 1,
+    "lambda.CreateFunction": 1,
+    "lambda.GetFunctionConfiguration": 2,
+    "events.DescribeRule": 1,
+    "events.PutRule": 1,
+    "lambda.AddPermission": 1,
+    "events.ListTargetsByRule": 1,
+    "events.PutTargets": 1
+  },
+  "metrics": []
+}

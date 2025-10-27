@@ -1,0 +1,4 @@
+2025-10-27 15:16:02,029 - custodian.policy - INFO - policy:cloudtrail-security-events resource:aws.account region:us-west-2 count:1 time:1.28
+2025-10-27 16:25:38,375 - custodian.policy - INFO - policy:cloudtrail-security-events resource:aws.account region:us-east-1 count:1 time:1.39
+2025-10-27 16:27:20,493 - custodian.policy - INFO - Provisioning policy lambda: cloudtrail-security-events region: us-east-1
+2025-10-27 16:27:21,734 - custodian.serverless - INFO - Publishing custodian policy lambda function custodian-cloudtrail-security-events

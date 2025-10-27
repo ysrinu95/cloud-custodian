@@ -1,0 +1,5 @@
+2025-10-27 15:16:00,725 - custodian.access-analyzer - WARNING - policy: iam-access-analyzer-external-access no active access analyzer found in account
+2025-10-27 15:16:00,728 - custodian.policy - INFO - policy:iam-access-analyzer-external-access resource:aws.access-analyzer-finding region:us-west-2 count:0 time:1.09
+2025-10-27 16:25:36,981 - custodian.policy - INFO - policy:iam-access-analyzer-external-access resource:aws.access-analyzer-finding region:us-east-1 count:2 time:2.29
+2025-10-27 16:26:52,757 - custodian.policy - INFO - Provisioning policy lambda: iam-access-analyzer-external-access region: us-east-1
+2025-10-27 16:26:54,023 - custodian.serverless - INFO - Publishing custodian policy lambda function custodian-iam-access-analyzer-external-access

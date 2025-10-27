@@ -1,0 +1,9 @@
+2025-10-27 15:15:51,309 - custodian.policy - INFO - policy:guardduty-high-severity-findings resource:aws.guardduty-finding region:us-west-2 count:0 time:1.17
+2025-10-27 15:17:10,508 - custodian.policy - INFO - policy:guardduty-high-severity-findings resource:aws.guardduty-finding region:us-east-1 count:0 time:3.42
+2025-10-27 15:17:19,253 - custodian.policy - INFO - Provisioning policy lambda: guardduty-high-severity-findings region: us-east-1
+2025-10-27 15:17:20,489 - custodian.serverless - INFO - Publishing custodian policy lambda function custodian-guardduty-high-severity-findings
+2025-10-27 15:39:02,005 - custodian.policy - INFO - Provisioning policy lambda: guardduty-high-severity-findings region: us-east-1
+2025-10-27 15:39:05,072 - custodian.serverless - DEBUG - Created custodian serverless archive size: 0.65mb
+2025-10-27 15:39:09,008 - custodian.output - DEBUG - metric:ApiCalls Count:4 policy:guardduty-high-severity-findings restype:aws.guardduty-finding
+2025-10-27 16:25:25,792 - custodian.policy - INFO - policy:guardduty-high-severity-findings resource:aws.guardduty-finding region:us-east-1 count:0 time:3.47
+2025-10-27 16:26:03,291 - custodian.policy - INFO - Provisioning policy lambda: guardduty-high-severity-findings region: us-east-1

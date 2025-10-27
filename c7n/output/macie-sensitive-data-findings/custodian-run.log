@@ -1,0 +1,4 @@
+2025-10-27 15:15:59,632 - custodian.policy - INFO - policy:macie-sensitive-data-findings resource:aws.s3 region:us-west-2 count:4 time:5.83
+2025-10-27 16:25:34,692 - custodian.policy - INFO - policy:macie-sensitive-data-findings resource:aws.s3 region:us-east-1 count:4 time:5.83
+2025-10-27 16:26:38,914 - custodian.policy - INFO - Provisioning policy lambda: macie-sensitive-data-findings region: us-east-1
+2025-10-27 16:26:40,163 - custodian.serverless - INFO - Publishing custodian policy lambda function custodian-macie-sensitive-data-findings

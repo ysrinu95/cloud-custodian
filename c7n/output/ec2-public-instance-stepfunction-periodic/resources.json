@@ -1,0 +1,163 @@
+[
+  {
+    "Architecture": "x86_64",
+    "BlockDeviceMappings": [
+      {
+        "DeviceName": "/dev/xvda",
+        "Ebs": {
+          "AttachTime": "2025-10-27T10:16:21+00:00",
+          "DeleteOnTermination": true,
+          "Status": "attached",
+          "VolumeId": "vol-0f83291b9415418bf"
+        }
+      }
+    ],
+    "ClientToken": "5e362023-d857-4d3c-ad95-cf4cd73640a4",
+    "EbsOptimized": false,
+    "EnaSupport": true,
+    "Hypervisor": "xen",
+    "NetworkInterfaces": [
+      {
+        "Association": {
+          "IpOwnerId": "amazon",
+          "PublicDnsName": "ec2-54-175-98-150.compute-1.amazonaws.com",
+          "PublicIp": "54.175.98.150"
+        },
+        "Attachment": {
+          "AttachTime": "2025-10-27T10:16:20+00:00",
+          "AttachmentId": "eni-attach-0481b91d7cdd0bf2d",
+          "DeleteOnTermination": true,
+          "DeviceIndex": 0,
+          "Status": "attached",
+          "NetworkCardIndex": 0
+        },
+        "Description": "",
+        "Groups": [
+          {
+            "GroupId": "sg-0cdf8de58d518585c",
+            "GroupName": "custodian-guardduty-demo-vulnerable-sg"
+          }
+        ],
+        "Ipv6Addresses": [],
+        "MacAddress": "0e:06:8e:dc:35:3b",
+        "NetworkInterfaceId": "eni-023ba8632299cf4fc",
+        "OwnerId": "172327596604",
+        "PrivateDnsName": "ip-172-31-39-231.ec2.internal",
+        "PrivateIpAddress": "172.31.39.231",
+        "PrivateIpAddresses": [
+          {
+            "Association": {
+              "IpOwnerId": "amazon",
+              "PublicDnsName": "ec2-54-175-98-150.compute-1.amazonaws.com",
+              "PublicIp": "54.175.98.150"
+            },
+            "Primary": true,
+            "PrivateDnsName": "ip-172-31-39-231.ec2.internal",
+            "PrivateIpAddress": "172.31.39.231"
+          }
+        ],
+        "SourceDestCheck": true,
+        "Status": "in-use",
+        "SubnetId": "subnet-078ba3325fba95239",
+        "VpcId": "vpc-06b11c14ee2183a8c",
+        "InterfaceType": "interface",
+        "Operator": {
+          "Managed": false
+        }
+      }
+    ],
+    "RootDeviceName": "/dev/xvda",
+    "RootDeviceType": "ebs",
+    "SecurityGroups": [
+      {
+        "GroupId": "sg-0cdf8de58d518585c",
+        "GroupName": "custodian-guardduty-demo-vulnerable-sg"
+      }
+    ],
+    "SourceDestCheck": true,
+    "Tags": [
+      {
+        "Key": "Name",
+        "Value": "custodian-guardduty-test-instance"
+      },
+      {
+        "Key": "CustodianDemo",
+        "Value": "GuardDutySecurityTest"
+      }
+    ],
+    "VirtualizationType": "hvm",
+    "CpuOptions": {
+      "CoreCount": 1,
+      "ThreadsPerCore": 2
+    },
+    "CapacityReservationSpecification": {
+      "CapacityReservationPreference": "open"
+    },
+    "HibernationOptions": {
+      "Configured": false
+    },
+    "MetadataOptions": {
+      "State": "applied",
+      "HttpTokens": "optional",
+      "HttpPutResponseHopLimit": 1,
+      "HttpEndpoint": "enabled",
+      "HttpProtocolIpv6": "disabled",
+      "InstanceMetadataTags": "disabled"
+    },
+    "EnclaveOptions": {
+      "Enabled": false
+    },
+    "PlatformDetails": "Linux/UNIX",
+    "UsageOperation": "RunInstances",
+    "UsageOperationUpdateTime": "2025-10-27T10:16:20+00:00",
+    "PrivateDnsNameOptions": {
+      "HostnameType": "ip-name",
+      "EnableResourceNameDnsARecord": false,
+      "EnableResourceNameDnsAAAARecord": false
+    },
+    "MaintenanceOptions": {
+      "AutoRecovery": "default",
+      "RebootMigration": "default"
+    },
+    "CurrentInstanceBootMode": "legacy-bios",
+    "NetworkPerformanceOptions": {
+      "BandwidthWeighting": "default"
+    },
+    "Operator": {
+      "Managed": false
+    },
+    "InstanceId": "i-03a4107eb0eaeee9d",
+    "ImageId": "ami-057a9f77fd28e08c5",
+    "State": {
+      "Code": 16,
+      "Name": "running"
+    },
+    "PrivateDnsName": "ip-172-31-39-231.ec2.internal",
+    "PublicDnsName": "ec2-54-175-98-150.compute-1.amazonaws.com",
+    "StateTransitionReason": "",
+    "AmiLaunchIndex": 0,
+    "ProductCodes": [],
+    "InstanceType": "t3.micro",
+    "LaunchTime": "2025-10-27T10:16:20+00:00",
+    "Placement": {
+      "AvailabilityZoneId": "use1-az6",
+      "GroupName": "",
+      "Tenancy": "default",
+      "AvailabilityZone": "us-east-1d"
+    },
+    "Monitoring": {
+      "State": "disabled"
+    },
+    "SubnetId": "subnet-078ba3325fba95239",
+    "VpcId": "vpc-06b11c14ee2183a8c",
+    "PrivateIpAddress": "172.31.39.231",
+    "PublicIpAddress": "54.175.98.150",
+    "c7n:MatchedFilters": [
+      "State.Name",
+      "PublicIpAddress",
+      "NetworkInterfaces[].Association.PublicIp",
+      "Tags[?Key == 'PublicInstanceApproved'] | length(@)",
+      "Tags[?Key == 'SecurityFinding'] | length(@)"
+    ]
+  }
+]

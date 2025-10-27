@@ -130,40 +130,82 @@ Write-Info "Using subnet: $subnetId"
 Write-Info "🔒 Creating vulnerable security group..."
 $sgName = "$DemoPrefix-vulnerable-sg-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
 
-$sgId = aws ec2 create-security-group --region $Region --group-name $sgName --description "Vulnerable SG for GuardDuty demo" --vpc-id $vpcId --query "GroupId" --output text
+Write-Info "Creating security group with name: $sgName"
+$sgCreateOutput = aws ec2 create-security-group --region $Region --group-name $sgName --description "Vulnerable SG for GuardDuty demo" --vpc-id $vpcId --output json
 
-if (-not $sgId) {
+if ($LASTEXITCODE -ne 0) {
     Write-Error "Failed to create security group"
+    Write-Error "AWS CLI output: $sgCreateOutput"
+    exit 1
+}
+
+$sgResult = $sgCreateOutput | ConvertFrom-Json
+$sgId = $sgResult.GroupId
+
+if (-not $sgId -or $sgId -eq "" -or $sgId -eq "None") {
+    Write-Error "Failed to get security group ID from creation result"
+    Write-Error "Creation output: $sgCreateOutput"
     exit 1
 }
 
 Write-Success "Created security group: $sgId"
 
 # Tag the security group
+Write-Info "Tagging security group..."
 aws ec2 create-tags --region $Region --resources $sgId --tags "Key=$DemoTagKey,Value=$DemoTagValue" "Key=Name,Value=$sgName"
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Warning "Failed to tag security group, but continuing..."
+}
 
 # Add dangerous rules
 Write-Warning "Adding dangerous security group rules (GuardDuty will detect these)..."
+
+Write-Info "Adding SSH rule (port 22)..."
 aws ec2 authorize-security-group-ingress --region $Region --group-id $sgId --protocol tcp --port 22 --cidr "0.0.0.0/0"
+
+Write-Info "Adding RDP rule (port 3389)..."
 aws ec2 authorize-security-group-ingress --region $Region --group-id $sgId --protocol tcp --port 3389 --cidr "0.0.0.0/0"
+
+Write-Info "Adding HTTP rule (port 80)..."
 aws ec2 authorize-security-group-ingress --region $Region --group-id $sgId --protocol tcp --port 80 --cidr "0.0.0.0/0"
+
+Write-Info "Adding HTTPS rule (port 443)..."
 aws ec2 authorize-security-group-ingress --region $Region --group-id $sgId --protocol tcp --port 443 --cidr "0.0.0.0/0"
+
+Write-Info "Adding MySQL rule (port 3306)..."
 aws ec2 authorize-security-group-ingress --region $Region --group-id $sgId --protocol tcp --port 3306 --cidr "0.0.0.0/0"
+
+Write-Info "Adding PostgreSQL rule (port 5432)..."
 aws ec2 authorize-security-group-ingress --region $Region --group-id $sgId --protocol tcp --port 5432 --cidr "0.0.0.0/0"
 
 Write-Success "Added dangerous security group rules"
 
 # Get latest Amazon Linux 2 AMI
 Write-Info "🔍 Finding latest Amazon Linux 2 AMI..."
-$amiId = aws ec2 describe-images --region $Region --owners amazon --filters "Name=name,Values=amzn2-ami-hvm-*-x86_64-gp2" "Name=state,Values=available" --query "Images|sort_by(@,&CreationDate)|[-1].ImageId" --output text
+$amiOutput = aws ec2 describe-images --region $Region --owners amazon --filters "Name=name,Values=amzn2-ami-hvm-*-x86_64-gp2" "Name=state,Values=available" --query "sort_by(Images, &CreationDate)[-1].ImageId" --output text
 
+if ($LASTEXITCODE -ne 0 -or -not $amiOutput -or $amiOutput -eq "None") {
+    Write-Error "Failed to find Amazon Linux 2 AMI"
+    exit 1
+}
+
+$amiId = $amiOutput.Trim()
 Write-Info "Using AMI: $amiId"
 
 # Create key pair
 $keyName = "$DemoPrefix-keypair-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
 Write-Info "Creating key pair: $keyName"
 
-$keyMaterial = aws ec2 create-key-pair --region $Region --key-name $keyName --query "KeyMaterial" --output text
+$keyOutput = aws ec2 create-key-pair --region $Region --key-name $keyName --output json
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Failed to create key pair"
+    exit 1
+}
+
+$keyResult = $keyOutput | ConvertFrom-Json
+$keyMaterial = $keyResult.KeyMaterial
 $keyMaterial | Out-File -FilePath "$env:TEMP\$keyName.pem" -Encoding ASCII
 
 # Tag the key pair
@@ -202,26 +244,47 @@ $userDataBase64 = [System.Convert]::ToBase64String($userDataBytes)
 
 # Launch instance
 Write-Info "🖥️ Launching vulnerable EC2 instance..."
-$instanceId = aws ec2 run-instances --region $Region --image-id $amiId --count 1 --instance-type t3.micro --key-name $keyName --security-group-ids $sgId --subnet-id $subnetId --associate-public-ip-address --user-data $userDataBase64 --query "Instances[0].InstanceId" --output text
+$instanceOutput = aws ec2 run-instances --region $Region --image-id $amiId --count 1 --instance-type t3.micro --key-name $keyName --security-group-ids $sgId --subnet-id $subnetId --associate-public-ip-address --user-data $userDataBase64 --output json
 
-if (-not $instanceId) {
+if ($LASTEXITCODE -ne 0) {
     Write-Error "Failed to launch instance"
+    Write-Error "AWS CLI output: $instanceOutput"
+    exit 1
+}
+
+$instanceResult = $instanceOutput | ConvertFrom-Json
+$instanceId = $instanceResult.Instances[0].InstanceId
+
+if (-not $instanceId -or $instanceId -eq "" -or $instanceId -eq "None") {
+    Write-Error "Failed to get instance ID from launch result"
+    Write-Error "Launch output: $instanceOutput"
     exit 1
 }
 
 Write-Success "Launched instance: $instanceId"
 
 # Tag the instance
+Write-Info "Tagging instance..."
 aws ec2 create-tags --region $Region --resources $instanceId --tags "Key=$DemoTagKey,Value=$DemoTagValue" "Key=Name,Value=$DemoPrefix-vulnerable-instance" "Key=Purpose,Value=SecurityTesting"
 
 # Wait for instance to be running
 Write-Info "Waiting for instance to be running..."
 aws ec2 wait instance-running --region $Region --instance-ids $instanceId
 
-# Get public IP
-$publicIp = aws ec2 describe-instances --region $Region --instance-ids $instanceId --query "Reservations[0].Instances[0].PublicIpAddress" --output text
+if ($LASTEXITCODE -ne 0) {
+    Write-Warning "Instance may not be running yet, but continuing..."
+}
 
-Write-Success "Instance is running with public IP: $publicIp"
+# Get public IP
+$publicIpOutput = aws ec2 describe-instances --region $Region --instance-ids $instanceId --query "Reservations[0].Instances[0].PublicIpAddress" --output text
+
+if ($LASTEXITCODE -eq 0 -and $publicIpOutput -and $publicIpOutput -ne "None") {
+    $publicIp = $publicIpOutput.Trim()
+    Write-Success "Instance is running with public IP: $publicIp"
+} else {
+    Write-Warning "Could not get public IP, but instance should be launching"
+    $publicIp = "pending"
+}
 
 # Simulate additional suspicious activities from client side
 Write-Info "🚨 Simulating suspicious activities..."

@@ -1,0 +1,43 @@
+2025-10-27 15:15:53,793 - custodian.output - ERROR - Error while executing policy
+Traceback (most recent call last):
+  File "C:\Users\ysrin\AppData\Roaming\Python\Python311\site-packages\c7n\policy.py", line 330, in run
+    resources = self.policy.resource_manager.resources()
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ysrin\AppData\Roaming\Python\Python311\site-packages\c7n\query.py", line 540, in resources
+    resources = self.source.resources(query)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ysrin\AppData\Roaming\Python\Python311\site-packages\c7n\resources\securityhub.py", line 721, in resources
+    return super().resources(query=query)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ysrin\AppData\Roaming\Python\Python311\site-packages\c7n\query.py", line 230, in resources
+    return self.query.filter(self.manager, **query)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ysrin\AppData\Roaming\Python\Python311\site-packages\c7n\query.py", line 75, in filter
+    return self._invoke_client_enum(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ysrin\AppData\Roaming\Python\Python311\site-packages\c7n\query.py", line 53, in _invoke_client_enum
+    data = results.build_full_result()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ysrin\AppData\Roaming\Python\Python311\site-packages\botocore\paginate.py", line 487, in build_full_result
+    for response in self:
+  File "C:\Users\ysrin\AppData\Roaming\Python\Python311\site-packages\botocore\paginate.py", line 272, in __iter__
+    response = self._make_request(current_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ysrin\AppData\Roaming\Python\Python311\site-packages\c7n\query.py", line 771, in _make_request
+    return self.retry(self._method, **current_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ysrin\AppData\Roaming\Python\Python311\site-packages\c7n\utils.py", line 457, in _retry
+    return func(*args, **kw)
+           ^^^^^^^^^^^^^^^^^
+  File "C:\Users\ysrin\AppData\Roaming\Python\Python311\site-packages\botocore\client.py", line 602, in _api_call
+    return self._make_api_call(operation_name, kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ysrin\AppData\Roaming\Python\Python311\site-packages\botocore\context.py", line 123, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ysrin\AppData\Roaming\Python\Python311\site-packages\botocore\client.py", line 1078, in _make_api_call
+    raise error_class(parsed_response, operation_name)
+botocore.errorfactory.InvalidAccessException: An error occurred (InvalidAccessException) when calling the GetFindings operation: Account 172327596604 is not subscribed to AWS Security Hub
+2025-10-27 16:25:28,859 - custodian.policy - INFO - policy:securityhub-critical-findings resource:aws.securityhub-finding region:us-east-1 count:0 time:1.73
+2025-10-27 16:26:24,405 - custodian.policy - INFO - Provisioning policy lambda: securityhub-critical-findings region: us-east-1
+2025-10-27 16:26:26,239 - custodian.serverless - INFO - Publishing custodian policy lambda function custodian-securityhub-critical-findings

@@ -1,0 +1,4 @@
+2025-10-27 15:16:03,669 - custodian.policy - INFO - policy:security-findings-daily-summary resource:aws.account region:us-west-2 count:1 time:0.00
+2025-10-27 16:25:40,743 - custodian.policy - INFO - policy:security-findings-daily-summary resource:aws.account region:us-east-1 count:1 time:0.00
+2025-10-27 16:28:01,834 - custodian.policy - INFO - Provisioning policy lambda: security-findings-daily-summary region: us-east-1
+2025-10-27 16:28:03,090 - custodian.serverless - INFO - Publishing custodian policy lambda function custodian-security-findings-daily-summary
