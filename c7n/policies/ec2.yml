@@ -1,7 +1,7 @@
 vars:
   tags: &tags
     contact: ysrinu95@gmail.com
-    environment: "{environment}"
+    environment: "engg"
     repo: devops/cloud-custodian/c7n
   email-notify: &email-notify
     template: aws-basic_email.html
