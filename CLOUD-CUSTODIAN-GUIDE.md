@@ -46,8 +46,6 @@ Cloud Custodian is an open-source rules engine for cloud security, compliance, a
    - **Critical Security Incidents** (Severity >= 9.0):
      - **Ransomware Attacks**: Immediate isolation, snapshot creation, forensic data collection
      - **Data Exfiltration**: Block outbound traffic, disable IAM credentials, alert SOC
-     - **Cryptocurrency Mining**: Terminate instances, analyze attack vectors, update WAF rules
-     - **Root Credential Usage**: Disable access keys, rotate credentials, notify CISO
    
    - **High Security Breaches** (Severity >= 7.0):
      - **Unauthorized Access**: Revoke sessions, enable MFA enforcement, audit access logs
@@ -55,20 +53,10 @@ Cloud Custodian is an open-source rules engine for cloud security, compliance, a
      - **IAM Policy Violations**: Revert to least-privilege policies, notify security team
    
    - **Automated Runbook Execution** (via Step Functions):
-     - Create ServiceNow/Jira incident tickets automatically
+     - Create Rally incident tickets automatically
      - Initiate forensic investigation workflows
      - Trigger compliance audit processes
-     - Update security dashboards and SIEM platforms
      - Generate executive security reports
-
-#### Implementation Strategy
-
-| Severity | Response Time | Automation Level | Human Intervention |
-|----------|---------------|------------------|--------------------|
-| **CRITICAL** (9.0-10.0) | < 1 minute | 100% Automated | Post-incident review only |
-| **HIGH** (7.0-8.9) | < 5 minutes | 95% Automated | Approval for destructive actions |
-| **MEDIUM** (4.0-6.9) | < 15 minutes | 80% Automated | Review before remediation |
-| **LOW** (0.1-3.9) | < 1 hour | 50% Automated | Manual remediation preferred |
 
 ### Key Benefits
 - **Policy as Code**: Define security and compliance rules in YAML
