@@ -37,7 +37,7 @@ Cloud Custodian is an open-source rules engine for cloud security, compliance, a
 │         │                    │                    │         │
 │  ┌──────▼──────┐    ┌────────▼────────┐  ┌───────▼──────┐ │
 │  │   Schema    │    │    Filters      │  │ Notifications│ │
-│  │ Validation  │    │ (Resource Query)│  │(Slack/Email) │ │
+│  │ Validation  │    │ (Resource Query)│  │(Teams/Email) │ │
 │  └─────────────┘    └─────────────────┘  └──────────────┘ │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
@@ -132,6 +132,67 @@ mode:
 **Execution Flow:**
 ```
 GuardDuty Finding → EventBridge → Lambda → Policy Filter → Action
+```
+
+#### d) **Security Hub Mode** (CSPM Findings)
+Responds to AWS Security Hub findings via CloudTrail events.
+
+```yaml
+mode:
+  type: cloudtrail
+  events:
+    - source: aws.securityhub
+      event: BatchImportFindings
+      ids: "detail.findings[].Id"
+  role: arn:aws:iam::{account_id}:role/cloud-custodian
+```
+
+**Execution Flow:**
+```
+Security Hub Finding → CloudTrail → EventBridge → Lambda → Policy Filter → Action
+```
+
+**Key Features:**
+- Aggregates findings from multiple services (GuardDuty, Inspector, Macie, Config, IAM Access Analyzer)
+- Supports compliance standards (AWS Foundational Security Best Practices, CIS Benchmarks)
+- Real-time response to BatchImportFindings events
+- Filter by severity labels (CRITICAL, HIGH, MEDIUM, LOW)
+- Update finding workflow status with `post-finding` action
+
+**Example Policy:**
+```yaml
+policies:
+  - name: securityhub-critical-findings
+    resource: aws.securityhub-finding
+    mode:
+      type: cloudtrail
+      events:
+        - source: aws.securityhub
+          event: BatchImportFindings
+          ids: "detail.findings[].Id"
+    filters:
+      - type: value
+        key: Severity.Label
+        op: in
+        value: ["CRITICAL", "HIGH"]
+      - type: value
+        key: RecordState
+        value: ACTIVE
+    actions:
+      - type: post-finding
+        compliance_status: FAILED
+        severity_label: HIGH
+      - type: notify
+        to: security-team@company.com
+```
+
+#### e) **Config Rule Mode** (Compliance)
+Integrates with AWS Config for compliance evaluation.
+
+```yaml
+mode:
+  type: config-rule
+  role: arn:aws:iam::{account_id}:role/cloud-custodian
 ```
 
 **Detailed Step-by-Step Process:**
@@ -261,7 +322,23 @@ The EventBridge rule uses a pattern that pre-filters events before Lambda invoca
 4. **Reliable**: EventBridge guarantees at-least-once delivery
 5. **Auditable**: Complete event trail in CloudWatch Logs
 
-#### d) **Config Rule Mode** (Compliance)
+**Similar Flow for Security Hub:**
+Security Hub uses the same EventBridge-based architecture but triggers on `BatchImportFindings` CloudTrail events:
+```
+Security Hub Finding → CloudTrail (BatchImportFindings) → EventBridge → Lambda → Policy Evaluation → Action
+```
+
+Security Hub aggregates findings from multiple AWS security services:
+- **GuardDuty**: Threat detection findings
+- **Inspector**: Vulnerability assessments
+- **Macie**: Sensitive data discovery
+- **Config**: Compliance rule violations
+- **IAM Access Analyzer**: Resource access findings
+- **Firewall Manager**: Security policy violations
+
+This allows a single Cloud Custodian policy to respond to findings from all these services.
+
+#### f) **Config Rule Mode** (Compliance)
 Integrates with AWS Config for compliance evaluation.
 
 ```yaml
