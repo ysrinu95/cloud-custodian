@@ -15,6 +15,61 @@
 
 Cloud Custodian is an open-source rules engine for cloud security, compliance, and governance. It enables policy-as-code for managing AWS resources through automated enforcement and remediation.
 
+### Aikyam Security Objectives
+
+**Mission**: Implement a comprehensive, automated security response framework for cloud infrastructure that minimizes human intervention and reduces mean time to remediation (MTTR).
+
+#### Core Objectives
+
+1. **Framework for Auto-Response to Cloud Security Events**
+   - Real-time detection and response to security threats via EventBridge integration
+   - Event-driven architecture that responds to GuardDuty, Security Hub, Config, and Macie findings
+   - Automated policy enforcement across all AWS accounts and regions
+   - Zero-touch remediation for known security patterns
+   - Continuous monitoring and validation of security posture
+
+2. **Automatic Remediation (Enabled by Default)**
+   - **High/Critical Findings**: Immediate automated remediation without human approval
+     - Isolate compromised EC2 instances to quarantine security groups
+     - Revoke IAM credentials for compromised users
+     - Remove dangerous security group rules (0.0.0.0/0 exposure)
+     - Disable non-compliant resources
+   - **Medium Findings**: Automated remediation with notification
+     - Apply missing encryption to S3 buckets and EBS volumes
+     - Enable CloudTrail logging on non-compliant accounts
+     - Remediate IAM policy violations
+   - **Low Findings**: Alert and schedule remediation
+     - Tag resources for compliance tracking
+     - Generate compliance reports for manual review
+
+3. **Trigger Automatic Incident Response Runbooks**
+   - **Critical Security Incidents** (Severity >= 9.0):
+     - **Ransomware Attacks**: Immediate isolation, snapshot creation, forensic data collection
+     - **Data Exfiltration**: Block outbound traffic, disable IAM credentials, alert SOC
+     - **Cryptocurrency Mining**: Terminate instances, analyze attack vectors, update WAF rules
+     - **Root Credential Usage**: Disable access keys, rotate credentials, notify CISO
+   
+   - **High Security Breaches** (Severity >= 7.0):
+     - **Unauthorized Access**: Revoke sessions, enable MFA enforcement, audit access logs
+     - **Security Group Violations**: Remove dangerous rules, restore to baseline configuration
+     - **IAM Policy Violations**: Revert to least-privilege policies, notify security team
+   
+   - **Automated Runbook Execution** (via Step Functions):
+     - Create ServiceNow/Jira incident tickets automatically
+     - Initiate forensic investigation workflows
+     - Trigger compliance audit processes
+     - Update security dashboards and SIEM platforms
+     - Generate executive security reports
+
+#### Implementation Strategy
+
+| Severity | Response Time | Automation Level | Human Intervention |
+|----------|---------------|------------------|--------------------|
+| **CRITICAL** (9.0-10.0) | < 1 minute | 100% Automated | Post-incident review only |
+| **HIGH** (7.0-8.9) | < 5 minutes | 95% Automated | Approval for destructive actions |
+| **MEDIUM** (4.0-6.9) | < 15 minutes | 80% Automated | Review before remediation |
+| **LOW** (0.1-3.9) | < 1 hour | 50% Automated | Manual remediation preferred |
+
 ### Key Benefits
 - **Policy as Code**: Define security and compliance rules in YAML
 - **Event-Driven**: Respond to AWS events in real-time via EventBridge/CloudWatch Events
@@ -195,36 +250,61 @@ mode:
   role: arn:aws:iam::{account_id}:role/cloud-custodian
 ```
 
-**Detailed Step-by-Step Process:**
+**Detailed Step-by-Step Process (Security Hub Example):**
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  1. GuardDuty Detects Threat                                │
-│     • Overly permissive security group detected             │
-│     • Severity: 8.0 (HIGH)                                  │
+│  1. Security Hub Aggregates Finding                         │
+│     • Source: AWS Foundational Security Best Practices      │
+│     • Control: EC2.19 - Security groups should not allow    │
+│       unrestricted access to ports with high risk           │
+│     • Severity Label: HIGH                                  │
 │     • Resource: sg-1234567890abcdef0                        │
-│     • Violation: SSH (port 22) open to 0.0.0.0/0            │
+│     • Compliance Status: FAILED                             │
+│     • Violation: RDP (port 3389) open to 0.0.0.0/0          │
 └────────────────────┬────────────────────────────────────────┘
                      │
                      ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  2. EventBridge Receives Event                              │
+│  2. Security Hub Imports Finding (CloudTrail Event)         │
 │     {                                                        │
-│       "source": "aws.guardduty",                            │
-│       "detail-type": "GuardDuty Finding",                   │
+│       "source": "aws.securityhub",                          │
+│       "detail-type": "Security Hub Findings - Imported",    │
 │       "detail": {                                           │
-│         "severity": 8.0,                                    │
-│         "type": "Policy:IAMUser/RootCredentialUsage",       │
-│         "resource": {                                       │
-│           "accessKeyDetails": {                             │
-│             "userName": "root"                              │
-│           }                                                 │
-│         },                                                  │
-│         "service": {                                        │
-│           "action": {                                       │
-│             "actionType": "AWS_API_CALL"                    │
-│           }                                                 │
-│         }                                                   │
+│         "findings": [{                                      │
+│           "SchemaVersion": "2018-10-08",                    │
+│           "Id": "arn:aws:securityhub:...",                  │
+│           "ProductArn": "arn:aws:securityhub:...:fsbp",     │
+│           "GeneratorId": "aws-foundational-security-...",   │
+│           "AwsAccountId": "172327596604",                   │
+│           "Types": [                                        │
+│             "Software and Configuration Checks/AWS Security │
+│              Best Practices"                                │
+│           ],                                                │
+│           "Severity": {                                     │
+│             "Label": "HIGH",                                │
+│             "Normalized": 70                                │
+│           },                                                │
+│           "Title": "EC2.19 Security groups should not...",  │
+│           "Resources": [{                                   │
+│             "Type": "AwsEc2SecurityGroup",                  │
+│             "Id": "arn:aws:ec2:...:security-group/sg-...",  │
+│             "Details": {                                    │
+│               "AwsEc2SecurityGroup": {                      │
+│                 "GroupId": "sg-1234567890abcdef0",          │
+│                 "IpPermissions": [{                         │
+│                   "FromPort": 3389,                         │
+│                   "ToPort": 3389,                           │
+│                   "IpRanges": [{"CidrIp": "0.0.0.0/0"}]     │
+│                 }]                                          │
+│               }                                             │
+│             }                                               │
+│           }],                                               │
+│           "Compliance": {                                   │
+│             "Status": "FAILED"                              │
+│           },                                                │
+│           "RecordState": "ACTIVE"                           │
+│         }]                                                  │
 │       }                                                     │
 │     }                                                       │
 └────────────────────┬────────────────────────────────────────┘
@@ -232,13 +312,18 @@ mode:
                      ▼
 ┌─────────────────────────────────────────────────────────────┐
 │  3. EventBridge Rule Evaluation                             │
-│     Rule Name: custodian-guardduty-high-severity-findings   │
+│     Rule Name: custodian-securityhub-critical-findings      │
 │     Event Pattern:                                          │
 │     {                                                       │
-│       "source": ["aws.guardduty"],                         │
-│       "detail-type": ["GuardDuty Finding"],                │
+│       "source": ["aws.securityhub"],                       │
+│       "detail-type": ["Security Hub Findings - Imported"], │
 │       "detail": {                                          │
-│         "severity": [{"numeric": [">=", 7.0]}]            │
+│         "findings": {                                      │
+│           "Severity": {                                    │
+│             "Label": ["CRITICAL", "HIGH"]                  │
+│           },                                               │
+│           "RecordState": ["ACTIVE"]                        │
+│         }                                                  │
 │       }                                                    │
 │     }                                                      │
 │     ✅ Pattern Match! → Trigger Lambda                     │
@@ -247,29 +332,34 @@ mode:
                      ▼
 ┌─────────────────────────────────────────────────────────────┐
 │  4. Lambda Function Invoked                                 │
-│     Function: custodian-guardduty-high-severity-findings    │
-│     • Receives complete GuardDuty event payload             │
+│     Function: custodian-securityhub-critical-findings       │
+│     • Receives Security Hub BatchImportFindings event       │
 │     • Loads Cloud Custodian policy from embedded config     │
 │     • Initializes AWS session and runtime environment       │
-│     • Extracts resource ID from event.detail.resource       │
+│     • Extracts resource IDs from findings array             │
 └────────────────────┬────────────────────────────────────────┘
                      │
                      ▼
 ┌─────────────────────────────────────────────────────────────┐
 │  5. Policy Filter Evaluation                                │
-│     Filter 1: Severity Check                                │
-│       - type: event                                         │
-│         key: detail.severity                                │
-│         op: gte                                             │
-│         value: 7.0                                          │
-│       ✅ 8.0 >= 7.0 → PASS                                  │
-│                                                             │
-│     Filter 2: Finding Type Check                            │
-│       - type: event                                         │
-│         key: detail.type                                    │
+│     Filter 1: Severity Label Check                          │
+│       - type: value                                         │
+│         key: Severity.Label                                 │
 │         op: in                                              │
-│         value: [Policy:IAMUser/*, Recon:EC2/*]              │
-│       ✅ Policy:IAMUser/RootCredentialUsage → MATCH         │
+│         value: ["CRITICAL", "HIGH"]                         │
+│       ✅ HIGH → MATCH                                       │
+│                                                             │
+│     Filter 2: Record State Check                            │
+│       - type: value                                         │
+│         key: RecordState                                    │
+│         value: ACTIVE                                       │
+│       ✅ ACTIVE → PASS                                      │
+│                                                             │
+│     Filter 3: Compliance Status Check                       │
+│       - type: value                                         │
+│         key: Compliance.Status                              │
+│         value: FAILED                                       │
+│       ✅ FAILED → PASS                                      │
 │                                                             │
 │     All filters passed → Execute actions                    │
 └────────────────────┬────────────────────────────────────────┘
@@ -277,35 +367,36 @@ mode:
                      ▼
 ┌─────────────────────────────────────────────────────────────┐
 │  6. Actions Executed Sequentially                           │
-│     Action 1: Revoke IAM Credentials                        │
-│       • Disable root account access keys                    │
-│       • Create CloudWatch alarm for root usage              │
-│       • Log credential access to S3 audit bucket            │
+│     Action 1: Remediate Security Group                      │
+│       • Query security group sg-1234567890abcdef0           │
+│       • Remove dangerous ingress rules (0.0.0.0/0)          │
+│       • Keep rules with specific CIDR ranges                │
+│       • Log original rules to S3 for audit                  │
 │                                                             │
-│     Action 2: Remediate Security Group (if applicable)      │
-│       • Remove 0.0.0.0/0 ingress rules                      │
-│       • Replace with specific IP allowlist                  │
-│       • Create backup of original rules                     │
+│     Action 2: Update Security Hub Finding                   │
+│       • type: post-finding                                  │
+│       • Set Workflow.Status = RESOLVED                      │
+│       • Add Note: "Remediated by Cloud Custodian"           │
+│       • Update Compliance.Status = PASSED                   │
 │                                                             │
-│     Action 3: Tag Resource for Compliance                   │
-│       • GuardDutyFinding: Policy:IAMUser/RootCredentialUsage│
-│       • Severity: 8.0                                       │
+│     Action 3: Tag Resource for Compliance Tracking          │
+│       • SecurityHubFinding: EC2.19                          │
+│       • Severity: HIGH                                      │
 │       • RemediatedAt: 2025-10-28T10:00:00Z                  │
 │       • Status: Remediated                                  │
-│       • ComplianceStatus: NonCompliant                      │
+│       • ComplianceFramework: AWS-FSBP                       │
 │                                                             │
 │     Action 4: Trigger Step Functions Workflow               │
-│       • invoke-sfn: arn:aws:states:region:account:sm:name   │
-│       • Workflow: security-incident-response                │
-│       • Creates Jira ticket for SOC team review             │
-│       • Initiates forensic data collection                  │
-│       • Updates CMDB with security posture change           │
+│       • invoke-sfn: compliance-remediation-workflow         │
+│       • Update compliance dashboard                         │
+│       • Generate audit trail for compliance team            │
+│       • Create ServiceNow change ticket                     │
 │                                                             │
 │     Action 5: Send Multi-Channel Notifications              │
-│       • PagerDuty incident created (severity: high)         │
-│       • Teams message posted to security channel            │
-│       • Email sent to security-team@company.com             │
-│       • SNS message published for SIEM integration          │
+│       • Teams message to #security-compliance channel       │
+│       • Email to compliance-team@company.com                │
+│       • PagerDuty incident (if critical severity)           │
+│       • SNS message for SIEM integration                    │
 └─────────────────────────────────────────────────────────────┘
 ```
 
