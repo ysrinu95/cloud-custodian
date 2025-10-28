@@ -134,6 +134,130 @@ mode:
 GuardDuty Finding → EventBridge → Lambda → Policy Filter → Action
 ```
 
+**Detailed Step-by-Step Process:**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  1. GuardDuty Detects Threat                                │
+│     • CryptoCurrency mining detected                        │
+│     • Severity: 9.5 (CRITICAL)                              │
+│     • Resource: i-1234567890abcdef0                         │
+└────────────────────┬────────────────────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────────────────────────┐
+│  2. EventBridge Receives Event                              │
+│     {                                                        │
+│       "source": "aws.guardduty",                            │
+│       "detail-type": "GuardDuty Finding",                   │
+│       "detail": {                                           │
+│         "severity": 9.5,                                    │
+│         "type": "CryptoCurrency:EC2/BitcoinTool.B!DNS",     │
+│         "resource": {                                       │
+│           "instanceDetails": {                              │
+│             "instanceId": "i-1234567890abcdef0"             │
+│           }                                                 │
+│         }                                                   │
+│       }                                                     │
+│     }                                                       │
+└────────────────────┬────────────────────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────────────────────────┐
+│  3. EventBridge Rule Evaluation                             │
+│     Rule Name: custodian-guardduty-high-severity-findings   │
+│     Event Pattern:                                          │
+│     {                                                       │
+│       "source": ["aws.guardduty"],                         │
+│       "detail-type": ["GuardDuty Finding"],                │
+│       "detail": {                                          │
+│         "severity": [{"numeric": [">=", 7.0]}]            │
+│       }                                                    │
+│     }                                                      │
+│     ✅ Pattern Match! → Trigger Lambda                     │
+└────────────────────┬────────────────────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────────────────────────┐
+│  4. Lambda Function Invoked                                 │
+│     Function: custodian-guardduty-high-severity-findings    │
+│     • Receives complete GuardDuty event payload             │
+│     • Loads Cloud Custodian policy from embedded config     │
+│     • Initializes AWS session and runtime environment       │
+│     • Extracts resource ID from event.detail.resource       │
+└────────────────────┬────────────────────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────────────────────────┐
+│  5. Policy Filter Evaluation                                │
+│     Filter 1: Severity Check                                │
+│       - type: event                                         │
+│         key: detail.severity                                │
+│         op: gte                                             │
+│         value: 7.0                                          │
+│       ✅ 9.5 >= 7.0 → PASS                                  │
+│                                                             │
+│     Filter 2: Finding Type Check                            │
+│       - type: event                                         │
+│         key: detail.type                                    │
+│         op: in                                              │
+│         value: [CryptoCurrency:EC2/*]                       │
+│       ✅ CryptoCurrency:EC2/BitcoinTool.B!DNS → MATCH       │
+│                                                             │
+│     All filters passed → Execute actions                    │
+└────────────────────┬────────────────────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────────────────────────┐
+│  6. Actions Executed Sequentially                           │
+│     Action 1: Isolate Instance                              │
+│       • Remove from current security groups                 │
+│       • Add to quarantine security group                    │
+│       • Add forensics access group                          │
+│                                                             │
+│     Action 2: Create Forensic Snapshot                      │
+│       • Snapshot all attached EBS volumes                   │
+│       • Copy tags for tracking                              │
+│       • Tag snapshot with finding details                   │
+│                                                             │
+│     Action 3: Tag Resource                                  │
+│       • GuardDutyFinding: CryptoCurrency:EC2/*              │
+│       • Severity: 9.5                                       │
+│       • QuarantinedAt: 2025-10-28T10:00:00Z                 │
+│       • Status: Quarantined                                 │
+│                                                             │
+│     Action 4: Send Notifications                            │
+│       • PagerDuty incident created (severity: critical)     │
+│       • Teams message posted to security channel            │
+│       • Email sent to security-team@company.com             │
+│       • SNS message published for downstream processing     │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Timeline:**
+- **T+0ms**: GuardDuty detects threat and creates finding
+- **T+1s**: EventBridge receives finding event
+- **T+2s**: EventBridge evaluates rule pattern and triggers Lambda
+- **T+3s**: Lambda function starts, loads policy
+- **T+5s**: Filters evaluated, actions begin execution
+- **T+10s**: Security groups modified, instance isolated
+- **T+15s**: Snapshot creation initiated
+- **T+20s**: Tags applied, notifications sent
+- **T+30s**: Lambda execution completes
+
+**Event Pattern Matching:**
+The EventBridge rule uses a pattern that pre-filters events before Lambda invocation:
+- ✅ **Reduces Lambda invocations** (only HIGH/CRITICAL findings)
+- ✅ **Lowers costs** (fewer function executions)
+- ✅ **Faster response** (no unnecessary filter evaluation in Lambda)
+
+**Why This Flow is Efficient:**
+1. **Real-time**: GuardDuty → EventBridge is near-instantaneous
+2. **Serverless**: No infrastructure to manage, auto-scales
+3. **Cost-effective**: Pay only for Lambda executions that matter
+4. **Reliable**: EventBridge guarantees at-least-once delivery
+5. **Auditable**: Complete event trail in CloudWatch Logs
+
 #### d) **Config Rule Mode** (Compliance)
 Integrates with AWS Config for compliance evaluation.
 
