@@ -1,0 +1,746 @@
+# Cloud Custodian - AWS Security Automation Framework
+
+## Table of Contents
+1. [Overview](#overview)
+2. [Architecture & Design](#architecture--design)
+3. [Features & Capabilities](#features--capabilities)
+4. [Runtime Execution Logic](#runtime-execution-logic)
+5. [AWS Security Service Policies](#aws-security-service-policies)
+6. [Deployment & Operations](#deployment--operations)
+7. [Monitoring & Troubleshooting](#monitoring--troubleshooting)
+
+---
+
+## Overview
+
+Cloud Custodian is an open-source rules engine for cloud security, compliance, and governance. It enables policy-as-code for managing AWS resources through automated enforcement and remediation.
+
+### Key Benefits
+- **Policy as Code**: Define security and compliance rules in YAML
+- **Event-Driven**: Respond to AWS events in real-time via EventBridge/CloudWatch Events
+- **Serverless**: Runs as AWS Lambda functions with no infrastructure to manage
+- **Multi-Account**: Supports AWS Organizations for centralized governance
+- **Extensible**: Rich filter and action library with custom extensions
+
+### Core Components
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     Cloud Custodian Stack                    │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐ │
+│  │   Policies   │───▶│  c7n Engine  │───▶│   Actions    │ │
+│  │   (YAML)     │    │              │    │ (Remediate)  │ │
+│  └──────────────┘    └──────────────┘    └──────────────┘ │
+│         │                    │                    │         │
+│         │                    │                    │         │
+│  ┌──────▼──────┐    ┌────────▼────────┐  ┌───────▼──────┐ │
+│  │   Schema    │    │    Filters      │  │ Notifications│ │
+│  │ Validation  │    │ (Resource Query)│  │(Slack/Email) │ │
+│  └─────────────┘    └─────────────────┘  └──────────────┘ │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+         │                       │                      │
+         ▼                       ▼                      ▼
+┌──────────────┐        ┌──────────────┐      ┌──────────────┐
+│ EventBridge  │        │  AWS Lambda  │      │  CloudWatch  │
+│   Events     │        │  Functions   │      │     Logs     │
+└──────────────┘        └──────────────┘      └──────────────┘
+```
+
+---
+
+## Architecture & Design
+
+### 1. Policy Structure
+
+Cloud Custodian policies follow a consistent YAML schema:
+
+```yaml
+policies:
+  - name: policy-name                    # Unique identifier
+    resource: aws.resource-type          # AWS resource type
+    description: |                       # Policy description
+      What this policy does
+    
+    mode:                                # Execution mode
+      type: cloudtrail | periodic | guard-duty | config-rule
+      role: arn:aws:iam::account:role/name
+      events:                            # Event filters (for cloudtrail mode)
+        - source: service.amazonaws.com
+          event: EventName
+      schedule: "rate(1 day)"            # Schedule (for periodic mode)
+    
+    filters:                             # Resource selection criteria
+      - type: filter-type
+        key: attribute
+        op: eq | ne | gt | gte | lt | lte | in | not-in
+        value: value
+    
+    actions:                             # Remediation actions
+      - type: action-type
+        parameter: value
+```
+
+### 2. Execution Modes
+
+Cloud Custodian supports multiple execution modes:
+
+#### a) **CloudTrail Mode** (Event-Driven)
+Responds to real-time AWS API calls via EventBridge.
+
+```yaml
+mode:
+  type: cloudtrail
+  role: arn:aws:iam::{account_id}:role/cloud-custodian
+  events:
+    - source: ec2.amazonaws.com
+      event: RunInstances
+      ids: "responseElements.instancesSet.items[].instanceId"
+```
+
+**Execution Flow:**
+```
+AWS API Call → CloudTrail → EventBridge → Lambda → Policy Evaluation → Action
+```
+
+#### b) **Periodic Mode** (Scheduled)
+Runs on a schedule using CloudWatch Events cron/rate expressions.
+
+```yaml
+mode:
+  type: periodic
+  schedule: "rate(24 hours)"
+  role: arn:aws:iam::{account_id}:role/cloud-custodian
+```
+
+**Execution Flow:**
+```
+CloudWatch Event (Schedule) → Lambda → Query All Resources → Filter → Action
+```
+
+#### c) **GuardDuty Mode** (Security Findings)
+Responds to GuardDuty security findings via EventBridge.
+
+```yaml
+mode:
+  type: guard-duty
+  role: arn:aws:iam::{account_id}:role/cloud-custodian
+```
+
+**Execution Flow:**
+```
+GuardDuty Finding → EventBridge → Lambda → Policy Filter → Action
+```
+
+#### d) **Config Rule Mode** (Compliance)
+Integrates with AWS Config for compliance evaluation.
+
+```yaml
+mode:
+  type: config-rule
+  role: arn:aws:iam::{account_id}:role/cloud-custodian
+```
+
+### 3. Resource Query & Filtering
+
+Cloud Custodian uses a powerful filtering system:
+
+#### Filter Types
+
+| Filter Type | Description | Example |
+|------------|-------------|---------|
+| `value` | Compare attribute values | `key: State.Name, value: running` |
+| `age` | Resource age | `type: age, days: 90, op: gt` |
+| `tag` | Tag presence/value | `tag:Environment, value: production` |
+| `security-group` | Security group rules | `type: ingress, Cidr: 0.0.0.0/0` |
+| `event` | Event attribute (event mode) | `detail.severity, op: gte, value: 7.0` |
+| `metrics` | CloudWatch metrics | `type: metrics, name: CPUUtilization` |
+
+#### Filter Operators
+
+- **Comparison**: `eq`, `ne`, `gt`, `gte`, `lt`, `lte`
+- **Membership**: `in`, `not-in`, `contains`, `absent`, `present`
+- **Pattern**: `regex`, `glob`
+- **Logical**: `and`, `or`, `not`
+
+### 4. Action System
+
+Actions define what happens to resources that match filters:
+
+#### Common Actions
+
+| Action | Description | Use Case |
+|--------|-------------|----------|
+| `notify` | Send notifications | Alert via Slack/Email/SNS |
+| `tag` | Add/modify tags | Mark resources for tracking |
+| `remove-tag` | Remove tags | Cleanup |
+| `stop` | Stop instances | Cost savings |
+| `terminate` | Delete resources | Cleanup |
+| `snapshot` | Create backup | Before deletion |
+| `modify-security-groups` | Update SG rules | Remove dangerous rules |
+| `invoke-lambda` | Call custom Lambda | Custom logic |
+| `put-metric` | Publish CloudWatch metric | Monitoring |
+
+---
+
+## Runtime Execution Logic
+
+### 1. Lambda Function Lifecycle
+
+```python
+# Simplified execution flow
+def handler(event, context):
+    # 1. Load Policy
+    policy = load_policy_from_config()
+    
+    # 2. Initialize Session
+    session = get_aws_session(role_arn)
+    
+    # 3. Parse Event (if event-driven)
+    if is_event_mode():
+        resources = parse_event_resources(event)
+    else:
+        # 4. Query Resources
+        resources = query_aws_resources(policy.resource_type)
+    
+    # 5. Apply Filters
+    matched_resources = []
+    for resource in resources:
+        if policy.evaluate_filters(resource):
+            matched_resources.append(resource)
+    
+    # 6. Execute Actions
+    for action in policy.actions:
+        action.process(matched_resources)
+    
+    # 7. Generate Report
+    return {
+        'resources_evaluated': len(resources),
+        'resources_matched': len(matched_resources),
+        'actions_taken': len(policy.actions)
+    }
+```
+
+### 2. Event Processing
+
+#### GuardDuty Event Structure
+```json
+{
+  "version": "0",
+  "id": "finding-id",
+  "detail-type": "GuardDuty Finding",
+  "source": "aws.guardduty",
+  "account": "123456789012",
+  "time": "2025-10-27T10:00:00Z",
+  "region": "us-east-1",
+  "detail": {
+    "schemaVersion": "2.0",
+    "accountId": "123456789012",
+    "region": "us-east-1",
+    "id": "finding-id",
+    "arn": "arn:aws:guardduty:region:account:detector/id/finding/id",
+    "type": "UnauthorizedAccess:EC2/SSHBruteForce",
+    "severity": 8.0,
+    "title": "SSH brute force attack detected",
+    "description": "EC2 instance targeted by SSH brute force",
+    "resource": {
+      "resourceType": "Instance",
+      "instanceDetails": {
+        "instanceId": "i-1234567890abcdef0"
+      }
+    }
+  }
+}
+```
+
+### 3. Resource Resolution
+
+Cloud Custodian resolves resources from events using JMESPath:
+
+```yaml
+mode:
+  type: cloudtrail
+  events:
+    - event: RunInstances
+      ids: "responseElements.instancesSet.items[].instanceId"
+    - event: CreateSecurityGroup
+      ids: "responseElements.groupId"
+```
+
+### 4. Error Handling & Retries
+
+- **Lambda Retries**: Automatic retry on transient failures (up to 2 retries)
+- **DLQ Support**: Failed events sent to Dead Letter Queue for manual review
+- **CloudWatch Logs**: All execution details logged for debugging
+- **Metrics**: Custom CloudWatch metrics for monitoring
+
+---
+
+## AWS Security Service Policies
+
+### 1. GuardDuty Integration
+
+#### Policy: High Severity Findings
+
+```yaml
+policies:
+  - name: guardduty-high-severity-findings
+    resource: ec2
+    description: |
+      Responds to GuardDuty HIGH and CRITICAL severity findings
+      Automatically isolates compromised EC2 instances
+    
+    mode:
+      type: guard-duty
+      role: arn:aws:iam::{account_id}:role/cloud-custodian
+    
+    filters:
+      # Filter by finding severity
+      - type: event
+        key: detail.severity
+        op: gte
+        value: 7.0  # HIGH (7.0-8.9) and CRITICAL (9.0-10.0)
+      
+      # Filter by finding type (optional)
+      - type: event
+        key: detail.type
+        op: in
+        value:
+          - UnauthorizedAccess:EC2/SSHBruteForce
+          - CryptoCurrency:EC2/BitcoinTool.B!DNS
+          - Trojan:EC2/*
+          - Backdoor:EC2/*
+    
+    actions:
+      # 1. Isolate instance - remove from existing security groups
+      - type: modify-security-groups
+        isolation-group: sg-quarantine-id
+        add-groups: 
+          - sg-forensics-access
+        remove-groups: matched
+      
+      # 2. Create snapshot for forensics
+      - type: snapshot
+        copy-tags:
+          - Name
+          - Environment
+      
+      # 3. Tag for tracking
+      - type: tag
+        tags:
+          GuardDutyFinding: "{detail[type]}"
+          Severity: "{detail[severity]}"
+          QuarantinedAt: "{now}"
+          Status: "Quarantined"
+      
+      # 4. Notify security team
+      - type: notify
+        template: guardduty-finding
+        priority_header: "1"
+        subject: "GuardDuty HIGH/CRITICAL Finding - Action Taken"
+        to:
+          - security-team@company.com
+        transport:
+          type: sns
+          topic: arn:aws:sns:region:account:security-alerts
+```
+
+#### GuardDuty Finding Types & Severity
+
+| Finding Type | Severity | Description | Recommended Action |
+|--------------|----------|-------------|-------------------|
+| `CryptoCurrency:EC2/*` | CRITICAL (9.0+) | Cryptocurrency mining | Isolate + Investigate |
+| `Trojan:EC2/*` | CRITICAL (9.0+) | Trojan malware detected | Isolate + Terminate |
+| `Backdoor:EC2/*` | HIGH (8.0+) | C&C communication | Isolate + Investigate |
+| `UnauthorizedAccess:EC2/SSHBruteForce` | HIGH (8.0) | SSH brute force | Block IP + Monitor |
+| `Recon:EC2/PortProbe*` | MEDIUM-HIGH (5.0-8.0) | Port scanning | Monitor + Investigate |
+
+### 2. AWS Security Hub Integration
+
+```yaml
+policies:
+  - name: securityhub-critical-findings
+    resource: account
+    description: |
+      Responds to Security Hub critical findings
+      Aggregates findings from GuardDuty, Inspector, Macie, etc.
+    
+    mode:
+      type: cloudtrail
+      events:
+        - source: securityhub.amazonaws.com
+          event: BatchImportFindings
+          ids: "requestParameters.findings[].Id"
+      role: arn:aws:iam::{account_id}:role/cloud-custodian
+    
+    filters:
+      - type: event
+        key: detail.findings[].Severity.Label
+        op: in
+        value: ["CRITICAL", "HIGH"]
+      
+      - type: event
+        key: detail.findings[].Compliance.Status
+        value: FAILED
+    
+    actions:
+      - type: invoke-lambda
+        function: arn:aws:lambda:region:account:function:remediate-finding
+      
+      - type: notify
+        template: security-hub-finding
+        to:
+          - compliance-team@company.com
+```
+
+### 3. IAM Access Analyzer
+
+```yaml
+policies:
+  - name: iam-access-analyzer-findings
+    resource: iam-role
+    description: |
+      Responds to IAM Access Analyzer findings
+      Remediates overly permissive IAM roles
+    
+    mode:
+      type: cloudtrail
+      events:
+        - source: access-analyzer.amazonaws.com
+          event: CreateFinding
+      role: arn:aws:iam::{account_id}:role/cloud-custodian
+    
+    filters:
+      - type: event
+        key: detail.finding.status
+        value: ACTIVE
+      
+      - type: event
+        key: detail.finding.resourceType
+        value: AWS::IAM::Role
+    
+    actions:
+      - type: tag
+        tags:
+          AccessAnalyzerFinding: "Active"
+          ReviewRequired: "true"
+      
+      - type: notify
+        template: access-analyzer-finding
+        to:
+          - iam-admin@company.com
+```
+
+### 4. AWS Config Compliance
+
+```yaml
+policies:
+  - name: config-non-compliant-resources
+    resource: ec2
+    description: |
+      Responds to AWS Config compliance changes
+      Remediates non-compliant EC2 instances
+    
+    mode:
+      type: config-rule
+      role: arn:aws:iam::{account_id}:role/cloud-custodian
+    
+    filters:
+      - type: config-compliance
+        eval: non-compliant
+        rules:
+          - required-tags
+          - encrypted-volumes
+    
+    actions:
+      - type: stop
+      
+      - type: notify
+        template: config-compliance
+        to:
+          - operations@company.com
+```
+
+### 5. Macie Data Discovery
+
+```yaml
+policies:
+  - name: macie-sensitive-data-findings
+    resource: s3
+    description: |
+      Responds to Macie sensitive data findings
+      Encrypts buckets and restricts access
+    
+    mode:
+      type: cloudtrail
+      events:
+        - source: macie.amazonaws.com
+          event: CreateFinding
+      role: arn:aws:iam::{account_id}:role/cloud-custodian
+    
+    filters:
+      - type: event
+        key: detail.finding.severity
+        op: in
+        value: ["HIGH", "CRITICAL"]
+      
+      - type: event
+        key: detail.finding.category
+        value: CLASSIFICATION
+    
+    actions:
+      - type: encrypt-s3-bucket
+        crypto: AES256
+      
+      - type: set-bucket-policy
+        policy:
+          Statement:
+            - Effect: Deny
+              Principal: "*"
+              Action: "s3:GetObject"
+              Resource: "arn:aws:s3:::{bucket}/*"
+              Condition:
+                Bool:
+                  "aws:SecureTransport": "false"
+      
+      - type: notify
+        template: macie-finding
+        to:
+          - data-protection@company.com
+```
+
+---
+
+## Deployment & Operations
+
+### 1. Deployment Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    GitHub Repository                         │
+│  ┌────────────────────────────────────────────────────────┐ │
+│  │  policies/                                             │ │
+│  │  ├── guardduty.yml                                     │ │
+│  │  ├── securityhub.yml                                   │ │
+│  │  ├── ec2.yml                                           │ │
+│  │  └── iam.yml                                           │ │
+│  └────────────────────────────────────────────────────────┘ │
+└─────────────────────┬───────────────────────────────────────┘
+                      │
+                      ▼
+        ┌─────────────────────────┐
+        │   GitHub Actions CI/CD   │
+        │  .github/workflows/      │
+        │  cloud-custodian-        │
+        │  policies.yml            │
+        └────────────┬─────────────┘
+                     │
+                     ▼
+        ┌────────────────────────────┐
+        │  custodian run --validate  │
+        │  custodian run -s output/  │
+        └────────────┬───────────────┘
+                     │
+                     ▼
+        ┌────────────────────────────────────┐
+        │      AWS Lambda Functions          │
+        │  ┌──────────────────────────────┐  │
+        │  │ custodian-guardduty-findings │  │
+        │  │ custodian-ec2-public-ips     │  │
+        │  │ custodian-sg-remediation     │  │
+        │  └──────────────────────────────┘  │
+        └────────────────────────────────────┘
+                     │
+                     ▼
+        ┌────────────────────────────┐
+        │   EventBridge Rules         │
+        │  ┌──────────────────────┐   │
+        │  │ GuardDuty Finding    │   │
+        │  │ CloudTrail Events    │   │
+        │  │ Scheduled Rules      │   │
+        │  └──────────────────────┘   │
+        └────────────────────────────┘
+```
+
+### 2. CI/CD Pipeline
+
+```yaml
+# .github/workflows/cloud-custodian-policies.yml
+name: Cloud Custodian Policies
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'policies/**'
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Validate Policies
+        run: |
+          custodian validate policies/*.yml
+      
+      - name: Schema Check
+        run: |
+          custodian schema --validate policies/*.yml
+  
+  deploy:
+    needs: validate
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Deploy to Lambda
+        run: |
+          custodian run \
+            -s output/ \
+            --region us-east-1 \
+            policies/*.yml
+```
+
+### 3. Multi-Account Deployment
+
+```bash
+# Using c7n-org for AWS Organizations
+c7n-org run \
+  -c accounts.yml \
+  -s output/ \
+  -u policies/*.yml \
+  --region us-east-1
+```
+
+**accounts.yml:**
+```yaml
+accounts:
+  - account_id: '111111111111'
+    name: production
+    role: arn:aws:iam::111111111111:role/CloudCustodian
+    tags:
+      - environment:prod
+  
+  - account_id: '222222222222'
+    name: staging
+    role: arn:aws:iam::222222222222:role/CloudCustodian
+    tags:
+      - environment:staging
+```
+
+---
+
+## Monitoring & Troubleshooting
+
+### 1. CloudWatch Dashboards
+
+```json
+{
+  "widgets": [
+    {
+      "type": "metric",
+      "properties": {
+        "metrics": [
+          ["AWS/Lambda", "Invocations", {"stat": "Sum"}],
+          [".", "Errors", {"stat": "Sum"}],
+          [".", "Duration", {"stat": "Average"}]
+        ],
+        "period": 300,
+        "stat": "Average",
+        "region": "us-east-1",
+        "title": "Cloud Custodian Lambda Metrics"
+      }
+    }
+  ]
+}
+```
+
+### 2. Log Queries
+
+```bash
+# Find GuardDuty finding processing
+aws logs filter-log-events \
+  --log-group-name /aws/lambda/custodian-guardduty-findings \
+  --filter-pattern "GuardDuty Finding" \
+  --start-time $(date -d '1 hour ago' +%s)000
+
+# Find policy errors
+aws logs filter-log-events \
+  --log-group-name /aws/lambda/custodian-* \
+  --filter-pattern "ERROR" \
+  --start-time $(date -d '24 hours ago' +%s)000
+```
+
+### 3. Common Issues & Solutions
+
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| Lambda not triggered | EventBridge pattern mismatch | Verify event pattern matches AWS service events |
+| Permission errors | Missing IAM permissions | Add required permissions to Lambda execution role |
+| Resource not found | Event delay or filter issue | Add retries or adjust filters |
+| Timeout | Too many resources | Reduce batch size or increase timeout |
+
+### 4. Testing
+
+```bash
+# Dry-run mode (no actions taken)
+custodian run \
+  --dryrun \
+  -s output/ \
+  policies/guardduty.yml
+
+# Test specific policy
+custodian run \
+  --policy guardduty-high-severity-findings \
+  -s output/ \
+  policies/guardduty.yml
+
+# Validate policy syntax
+custodian validate policies/guardduty.yml
+```
+
+---
+
+## Best Practices
+
+### 1. Policy Design
+- ✅ Use descriptive policy names
+- ✅ Add detailed descriptions
+- ✅ Test with `--dryrun` before deploying
+- ✅ Use tags for resource tracking
+- ✅ Implement proper error handling
+
+### 2. Security
+- ✅ Use least-privilege IAM roles
+- ✅ Encrypt sensitive data in transit and at rest
+- ✅ Enable CloudTrail logging
+- ✅ Review policies in pull requests
+- ✅ Regular security audits
+
+### 3. Operations
+- ✅ Monitor Lambda invocations and errors
+- ✅ Set up CloudWatch alarms
+- ✅ Use Dead Letter Queues for failed events
+- ✅ Regular policy reviews and updates
+- ✅ Document policy changes
+
+---
+
+## Additional Resources
+
+- **Official Documentation**: https://cloudcustodian.io/docs/
+- **GitHub Repository**: https://github.com/cloud-custodian/cloud-custodian
+- **AWS GuardDuty**: https://docs.aws.amazon.com/guardduty/
+- **AWS Security Hub**: https://docs.aws.amazon.com/securityhub/
+- **EventBridge Patterns**: https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-event-patterns.html
+
+---
+
+**Last Updated**: October 2025  
+**Version**: 1.0  
+**Maintained By**: DevOps/Security Team
