@@ -21,6 +21,7 @@ Cloud Custodian is an open-source rules engine for cloud security, compliance, a
 - **Serverless**: Runs as AWS Lambda functions with no infrastructure to manage
 - **Multi-Account**: Supports AWS Organizations for centralized governance
 - **Extensible**: Rich filter and action library with custom extensions
+- **Integrated Alerting**: Native support for Teams, PagerDuty, Email, and SNS notifications
 
 ### Core Components
 ```
@@ -172,7 +173,7 @@ Actions define what happens to resources that match filters:
 
 | Action | Description | Use Case |
 |--------|-------------|----------|
-| `notify` | Send notifications | Alert via Slack/Email/SNS |
+| `notify` | Send notifications | Alert via Teams/PagerDuty/Email/SNS |
 | `tag` | Add/modify tags | Mark resources for tracking |
 | `remove-tag` | Remove tags | Cleanup |
 | `stop` | Stop instances | Cost savings |
@@ -346,6 +347,130 @@ policies:
           topic: arn:aws:sns:region:account:security-alerts
 ```
 
+#### Notification Configuration Options
+
+Cloud Custodian supports multiple notification channels:
+
+##### Option 1: Microsoft Teams Webhook
+
+```yaml
+actions:
+  - type: notify
+    template: default
+    subject: "GuardDuty HIGH/CRITICAL Finding - {account} {region}"
+    to:
+      - https://outlook.office.com/webhook/YOUR-WEBHOOK-URL
+    transport:
+      type: webhook
+      webhook_url: https://outlook.office.com/webhook/YOUR-WEBHOOK-URL
+    violation_desc: |
+      GuardDuty detected HIGH/CRITICAL severity finding
+    action_desc: |
+      Affected resource has been quarantined for investigation
+```
+
+**Teams Webhook Payload:**
+```python
+{
+  "@type": "MessageCard",
+  "@context": "http://schema.org/extensions",
+  "themeColor": "FF0000",
+  "summary": "GuardDuty HIGH/CRITICAL Finding",
+  "sections": [{
+    "activityTitle": "Cloud Custodian Alert",
+    "activitySubtitle": "GuardDuty Finding Detected",
+    "facts": [
+      {"name": "Severity", "value": "{detail[severity]}"},
+      {"name": "Finding Type", "value": "{detail[type]}"},
+      {"name": "Resource", "value": "{detail[resource][instanceDetails][instanceId]}"},
+      {"name": "Account", "value": "{account}"},
+      {"name": "Region", "value": "{region}"}
+    ],
+    "markdown": true
+  }]
+}
+```
+
+##### Option 2: PagerDuty Integration
+
+```yaml
+actions:
+  - type: notify
+    template: default
+    subject: "GuardDuty HIGH/CRITICAL Finding"
+    priority_header: "high"
+    to:
+      - pagerduty://INTEGRATION_KEY
+    transport:
+      type: pagerduty
+      integration_key: YOUR_PAGERDUTY_INTEGRATION_KEY
+      api_key: YOUR_PAGERDUTY_API_KEY
+    violation_desc: |
+      GuardDuty Finding: {detail[type]}
+      Severity: {detail[severity]}
+      Resource: {detail[resource][instanceDetails][instanceId]}
+```
+
+**PagerDuty Event Payload:**
+```yaml
+actions:
+  - type: notify
+    transport:
+      type: pagerduty
+      integration_key: YOUR_INTEGRATION_KEY
+    pagerduty_event:
+      event_action: trigger
+      severity: critical
+      source: cloud-custodian
+      summary: "GuardDuty {detail[type]} - Severity {detail[severity]}"
+      custom_details:
+        finding_id: "{detail[id]}"
+        finding_type: "{detail[type]}"
+        severity: "{detail[severity]}"
+        resource_id: "{detail[resource][instanceDetails][instanceId]}"
+        account: "{account}"
+        region: "{region}"
+```
+
+##### Option 3: Email Notifications (via SES)
+
+```yaml
+actions:
+  - type: notify
+    template: default
+    subject: "[CRITICAL] GuardDuty Finding - {detail[type]}"
+    to:
+      - security-team@company.com
+      - soc-team@company.com
+    cc:
+      - compliance@company.com
+    transport:
+      type: ses
+      from: cloud-custodian@company.com
+      region: us-east-1
+```
+
+##### Option 4: SNS Topic (for Multi-Channel Fanout)
+
+```yaml
+actions:
+  - type: notify
+    template: default
+    subject: "GuardDuty Finding Alert"
+    to:
+      - arn:aws:sns:us-east-1:123456789012:security-alerts
+    transport:
+      type: sns
+      topic: arn:aws:sns:us-east-1:123456789012:security-alerts
+```
+
+**SNS Topic Subscribers:**
+- Email subscriptions
+- Lambda functions for Teams/PagerDuty webhooks
+- SMS notifications
+- SQS queues for event processing
+```
+
 #### GuardDuty Finding Types & Severity
 
 | Finding Type | Severity | Description | Recommended Action |
@@ -509,6 +634,298 @@ policies:
         to:
           - data-protection@company.com
 ```
+
+---
+
+## Notification Templates & Integration
+
+### 1. Microsoft Teams Integration
+
+#### Setup Teams Webhook
+1. Go to your Teams channel → Connectors → Incoming Webhook
+2. Create webhook and copy URL
+3. Use webhook URL in Cloud Custodian policy
+
+#### Teams Notification Example
+
+```yaml
+policies:
+  - name: guardduty-teams-notification
+    resource: ec2
+    mode:
+      type: guard-duty
+      role: arn:aws:iam::{account_id}:role/cloud-custodian
+    
+    filters:
+      - type: event
+        key: detail.severity
+        op: gte
+        value: 7.0
+    
+    actions:
+      - type: notify
+        template: teams-alert
+        to:
+          - https://outlook.office.com/webhook/YOUR-WEBHOOK-URL
+        transport:
+          type: webhook
+          webhook_url: https://outlook.office.com/webhook/YOUR-WEBHOOK-URL
+          headers:
+            Content-Type: application/json
+        body: |
+          {
+            "@type": "MessageCard",
+            "@context": "https://schema.org/extensions",
+            "themeColor": "FF0000",
+            "summary": "GuardDuty Security Alert",
+            "sections": [{
+              "activityTitle": "🚨 GuardDuty HIGH/CRITICAL Finding",
+              "activitySubtitle": "Automated Response Triggered",
+              "facts": [
+                {"name": "Finding Type", "value": "{{ event.detail.type }}"},
+                {"name": "Severity", "value": "{{ event.detail.severity }}"},
+                {"name": "Instance ID", "value": "{{ event.detail.resource.instanceDetails.instanceId }}"},
+                {"name": "Account", "value": "{{ account }}"},
+                {"name": "Region", "value": "{{ region }}"},
+                {"name": "Timestamp", "value": "{{ event.time }}"}
+              ],
+              "markdown": true
+            }],
+            "potentialAction": [{
+              "@type": "OpenUri",
+              "name": "View in GuardDuty Console",
+              "targets": [{
+                "os": "default",
+                "uri": "https://{{ region }}.console.aws.amazon.com/guardduty/home?region={{ region }}#/findings"
+              }]
+            }]
+          }
+```
+
+### 2. PagerDuty Integration
+
+#### Setup PagerDuty
+1. Create PagerDuty service integration (Events API v2)
+2. Copy Integration Key
+3. Optionally create API key for advanced features
+
+#### PagerDuty Alert Example
+
+```yaml
+policies:
+  - name: guardduty-pagerduty-alert
+    resource: ec2
+    mode:
+      type: guard-duty
+      role: arn:aws:iam::{account_id}:role/cloud-custodian
+    
+    filters:
+      - type: event
+        key: detail.severity
+        op: gte
+        value: 8.5  # CRITICAL only
+    
+    actions:
+      - type: notify
+        template: pagerduty-incident
+        to:
+          - pagerduty://INTEGRATION_KEY
+        transport:
+          type: pagerduty
+          integration_key: YOUR_INTEGRATION_KEY
+        pagerduty_payload:
+          routing_key: YOUR_INTEGRATION_KEY
+          event_action: trigger
+          payload:
+            summary: "CRITICAL GuardDuty Finding: {{ event.detail.type }}"
+            severity: critical
+            source: cloud-custodian
+            component: guardduty
+            group: security
+            class: threat-detection
+            custom_details:
+              finding_id: "{{ event.detail.id }}"
+              finding_type: "{{ event.detail.type }}"
+              severity_score: "{{ event.detail.severity }}"
+              instance_id: "{{ event.detail.resource.instanceDetails.instanceId }}"
+              account_id: "{{ account }}"
+              region: "{{ region }}"
+              detection_time: "{{ event.detail.service.eventFirstSeen }}"
+              description: "{{ event.detail.description }}"
+          images:
+            - src: https://example.com/custodian-logo.png
+              alt: Cloud Custodian
+          links:
+            - href: "https://{{ region }}.console.aws.amazon.com/guardduty/home?region={{ region }}#/findings?search=id%3D{{ event.detail.id }}"
+              text: View in GuardDuty Console
+```
+
+#### PagerDuty Auto-Resolve Example
+
+```yaml
+policies:
+  - name: guardduty-pagerduty-resolve
+    resource: ec2
+    mode:
+      type: cloudtrail
+      events:
+        - source: guardduty.amazonaws.com
+          event: ArchiveFinding
+    
+    actions:
+      - type: notify
+        transport:
+          type: pagerduty
+          integration_key: YOUR_INTEGRATION_KEY
+        pagerduty_payload:
+          routing_key: YOUR_INTEGRATION_KEY
+          event_action: resolve
+          dedup_key: "guardduty-{{ event.detail.id }}"
+```
+
+### 3. Email Notifications (AWS SES)
+
+```yaml
+policies:
+  - name: guardduty-email-notification
+    resource: ec2
+    mode:
+      type: guard-duty
+      role: arn:aws:iam::{account_id}:role/cloud-custodian
+    
+    filters:
+      - type: event
+        key: detail.severity
+        op: gte
+        value: 7.0
+    
+    actions:
+      - type: notify
+        template: guardduty-email
+        template_format: html
+        subject: "[{{ event.detail.severity }}] GuardDuty Finding - {{ event.detail.type }}"
+        to:
+          - security-team@company.com
+          - soc-alerts@company.com
+        cc:
+          - compliance@company.com
+        transport:
+          type: ses
+          from: cloud-custodian-alerts@company.com
+          region: us-east-1
+```
+
+**Email Template (guardduty-email.html):**
+```html
+<html>
+<head>
+  <style>
+    .alert { background-color: #ff0000; color: white; padding: 10px; }
+    .details { background-color: #f5f5f5; padding: 15px; margin: 10px 0; }
+    .fact { margin: 5px 0; }
+  </style>
+</head>
+<body>
+  <div class="alert">
+    <h2>🚨 GuardDuty Security Alert</h2>
+  </div>
+  
+  <div class="details">
+    <h3>Finding Details</h3>
+    <div class="fact"><strong>Finding Type:</strong> {{ event.detail.type }}</div>
+    <div class="fact"><strong>Severity:</strong> {{ event.detail.severity }}</div>
+    <div class="fact"><strong>Title:</strong> {{ event.detail.title }}</div>
+    <div class="fact"><strong>Description:</strong> {{ event.detail.description }}</div>
+    
+    <h3>Resource Information</h3>
+    <div class="fact"><strong>Instance ID:</strong> {{ event.detail.resource.instanceDetails.instanceId }}</div>
+    <div class="fact"><strong>Instance Type:</strong> {{ event.detail.resource.instanceDetails.instanceType }}</div>
+    
+    <h3>Account & Location</h3>
+    <div class="fact"><strong>Account:</strong> {{ account }}</div>
+    <div class="fact"><strong>Region:</strong> {{ region }}</div>
+    <div class="fact"><strong>Detection Time:</strong> {{ event.detail.service.eventFirstSeen }}</div>
+    
+    <h3>Actions Taken</h3>
+    <ul>
+      <li>Instance isolated to quarantine security group</li>
+      <li>Forensic snapshot created</li>
+      <li>Resource tagged for investigation</li>
+    </ul>
+    
+    <p>
+      <a href="https://{{ region }}.console.aws.amazon.com/guardduty/home?region={{ region }}#/findings">
+        View in GuardDuty Console
+      </a>
+    </p>
+  </div>
+</body>
+</html>
+```
+
+### 4. Multi-Channel Notification Strategy
+
+```yaml
+policies:
+  - name: guardduty-multi-channel-alerts
+    resource: ec2
+    mode:
+      type: guard-duty
+      role: arn:aws:iam::{account_id}:role/cloud-custodian
+    
+    filters:
+      - type: event
+        key: detail.severity
+        op: gte
+        value: 7.0
+    
+    actions:
+      # 1. Immediate PagerDuty alert for CRITICAL findings
+      - type: notify
+        transport:
+          type: pagerduty
+          integration_key: YOUR_INTEGRATION_KEY
+        priority_header: high
+        filters:
+          - type: event
+            key: detail.severity
+            op: gte
+            value: 9.0
+      
+      # 2. Teams notification for all HIGH+ findings
+      - type: notify
+        transport:
+          type: webhook
+          webhook_url: https://outlook.office.com/webhook/YOUR-WEBHOOK-URL
+      
+      # 3. Email digest for compliance team
+      - type: notify
+        transport:
+          type: ses
+          from: custodian@company.com
+        to:
+          - compliance@company.com
+      
+      # 4. SNS topic for downstream processing
+      - type: notify
+        transport:
+          type: sns
+          topic: arn:aws:sns:us-east-1:123456789012:security-events
+```
+
+### 5. Notification Template Variables
+
+Available variables in notification templates:
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `{{ account }}` | AWS Account ID | `123456789012` |
+| `{{ region }}` | AWS Region | `us-east-1` |
+| `{{ event.detail.* }}` | GuardDuty finding details | `{{ event.detail.type }}` |
+| `{{ event.time }}` | Event timestamp | `2025-10-27T10:00:00Z` |
+| `{{ policy.name }}` | Cloud Custodian policy name | `guardduty-high-severity` |
+| `{{ resources }}` | Affected resources | List of resource IDs |
+| `{{ action_date }}` | Action execution time | `2025-10-27 10:05:00` |
 
 ---
 
