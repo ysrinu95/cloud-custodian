@@ -248,18 +248,6 @@ GuardDuty Finding → EventBridge → Lambda → Policy Filter → Action
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**Timeline:**
-- **T+0ms**: GuardDuty detects IAM root credential usage or open security group
-- **T+1s**: EventBridge receives finding event
-- **T+2s**: EventBridge evaluates rule pattern (severity >= 7.0) and triggers Lambda
-- **T+3s**: Lambda function starts, loads Cloud Custodian policy
-- **T+5s**: Filters evaluated (severity check, finding type check), actions begin
-- **T+8s**: IAM credentials revoked, security group rules remediated
-- **T+12s**: Step Functions workflow triggered for incident response
-- **T+15s**: Compliance tags applied to resources
-- **T+20s**: Multi-channel notifications sent (PagerDuty, Teams, Email, SNS)
-- **T+30s**: Lambda execution completes, Step Functions workflow continues
-
 **Event Pattern Matching:**
 The EventBridge rule uses a pattern that pre-filters events before Lambda invocation:
 - ✅ **Reduces Lambda invocations** (only HIGH/CRITICAL findings)
