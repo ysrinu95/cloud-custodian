@@ -139,9 +139,10 @@ GuardDuty Finding → EventBridge → Lambda → Policy Filter → Action
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  1. GuardDuty Detects Threat                                │
-│     • CryptoCurrency mining detected                        │
-│     • Severity: 9.5 (CRITICAL)                              │
-│     • Resource: i-1234567890abcdef0                         │
+│     • Overly permissive security group detected             │
+│     • Severity: 8.0 (HIGH)                                  │
+│     • Resource: sg-1234567890abcdef0                        │
+│     • Violation: SSH (port 22) open to 0.0.0.0/0            │
 └────────────────────┬────────────────────────────────────────┘
                      │
                      ▼
@@ -151,11 +152,16 @@ GuardDuty Finding → EventBridge → Lambda → Policy Filter → Action
 │       "source": "aws.guardduty",                            │
 │       "detail-type": "GuardDuty Finding",                   │
 │       "detail": {                                           │
-│         "severity": 9.5,                                    │
-│         "type": "CryptoCurrency:EC2/BitcoinTool.B!DNS",     │
+│         "severity": 8.0,                                    │
+│         "type": "Policy:IAMUser/RootCredentialUsage",       │
 │         "resource": {                                       │
-│           "instanceDetails": {                              │
-│             "instanceId": "i-1234567890abcdef0"             │
+│           "accessKeyDetails": {                             │
+│             "userName": "root"                              │
+│           }                                                 │
+│         },                                                  │
+│         "service": {                                        │
+│           "action": {                                       │
+│             "actionType": "AWS_API_CALL"                    │
 │           }                                                 │
 │         }                                                   │
 │       }                                                     │
@@ -195,14 +201,14 @@ GuardDuty Finding → EventBridge → Lambda → Policy Filter → Action
 │         key: detail.severity                                │
 │         op: gte                                             │
 │         value: 7.0                                          │
-│       ✅ 9.5 >= 7.0 → PASS                                  │
+│       ✅ 8.0 >= 7.0 → PASS                                  │
 │                                                             │
 │     Filter 2: Finding Type Check                            │
 │       - type: event                                         │
 │         key: detail.type                                    │
 │         op: in                                              │
-│         value: [CryptoCurrency:EC2/*]                       │
-│       ✅ CryptoCurrency:EC2/BitcoinTool.B!DNS → MATCH       │
+│         value: [Policy:IAMUser/*, Recon:EC2/*]              │
+│       ✅ Policy:IAMUser/RootCredentialUsage → MATCH         │
 │                                                             │
 │     All filters passed → Execute actions                    │
 └────────────────────┬────────────────────────────────────────┘
@@ -210,40 +216,49 @@ GuardDuty Finding → EventBridge → Lambda → Policy Filter → Action
                      ▼
 ┌─────────────────────────────────────────────────────────────┐
 │  6. Actions Executed Sequentially                           │
-│     Action 1: Isolate Instance                              │
-│       • Remove from current security groups                 │
-│       • Add to quarantine security group                    │
-│       • Add forensics access group                          │
+│     Action 1: Revoke IAM Credentials                        │
+│       • Disable root account access keys                    │
+│       • Create CloudWatch alarm for root usage              │
+│       • Log credential access to S3 audit bucket            │
 │                                                             │
-│     Action 2: Create Forensic Snapshot                      │
-│       • Snapshot all attached EBS volumes                   │
-│       • Copy tags for tracking                              │
-│       • Tag snapshot with finding details                   │
+│     Action 2: Remediate Security Group (if applicable)      │
+│       • Remove 0.0.0.0/0 ingress rules                      │
+│       • Replace with specific IP allowlist                  │
+│       • Create backup of original rules                     │
 │                                                             │
-│     Action 3: Tag Resource                                  │
-│       • GuardDutyFinding: CryptoCurrency:EC2/*              │
-│       • Severity: 9.5                                       │
-│       • QuarantinedAt: 2025-10-28T10:00:00Z                 │
-│       • Status: Quarantined                                 │
+│     Action 3: Tag Resource for Compliance                   │
+│       • GuardDutyFinding: Policy:IAMUser/RootCredentialUsage│
+│       • Severity: 8.0                                       │
+│       • RemediatedAt: 2025-10-28T10:00:00Z                  │
+│       • Status: Remediated                                  │
+│       • ComplianceStatus: NonCompliant                      │
 │                                                             │
-│     Action 4: Send Notifications                            │
-│       • PagerDuty incident created (severity: critical)     │
+│     Action 4: Trigger Step Functions Workflow               │
+│       • invoke-sfn: arn:aws:states:region:account:sm:name   │
+│       • Workflow: security-incident-response                │
+│       • Creates Jira ticket for SOC team review             │
+│       • Initiates forensic data collection                  │
+│       • Updates CMDB with security posture change           │
+│                                                             │
+│     Action 5: Send Multi-Channel Notifications              │
+│       • PagerDuty incident created (severity: high)         │
 │       • Teams message posted to security channel            │
 │       • Email sent to security-team@company.com             │
-│       • SNS message published for downstream processing     │
+│       • SNS message published for SIEM integration          │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 **Timeline:**
-- **T+0ms**: GuardDuty detects threat and creates finding
+- **T+0ms**: GuardDuty detects IAM root credential usage or open security group
 - **T+1s**: EventBridge receives finding event
-- **T+2s**: EventBridge evaluates rule pattern and triggers Lambda
-- **T+3s**: Lambda function starts, loads policy
-- **T+5s**: Filters evaluated, actions begin execution
-- **T+10s**: Security groups modified, instance isolated
-- **T+15s**: Snapshot creation initiated
-- **T+20s**: Tags applied, notifications sent
-- **T+30s**: Lambda execution completes
+- **T+2s**: EventBridge evaluates rule pattern (severity >= 7.0) and triggers Lambda
+- **T+3s**: Lambda function starts, loads Cloud Custodian policy
+- **T+5s**: Filters evaluated (severity check, finding type check), actions begin
+- **T+8s**: IAM credentials revoked, security group rules remediated
+- **T+12s**: Step Functions workflow triggered for incident response
+- **T+15s**: Compliance tags applied to resources
+- **T+20s**: Multi-channel notifications sent (PagerDuty, Teams, Email, SNS)
+- **T+30s**: Lambda execution completes, Step Functions workflow continues
 
 **Event Pattern Matching:**
 The EventBridge rule uses a pattern that pre-filters events before Lambda invocation:
@@ -305,6 +320,7 @@ Actions define what happens to resources that match filters:
 | `snapshot` | Create backup | Before deletion |
 | `modify-security-groups` | Update SG rules | Remove dangerous rules |
 | `invoke-lambda` | Call custom Lambda | Custom logic |
+| `invoke-sfn` | Trigger Step Functions | Complex workflows & orchestration |
 | `put-metric` | Publish CloudWatch metric | Monitoring |
 
 ---
