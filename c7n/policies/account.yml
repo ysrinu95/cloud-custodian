@@ -1,0 +1,126 @@
+vars:
+  tags: &tags
+    contact: ysrinu95@gmail.com
+    environment: "production"
+    repo: ysrinu95/cloud-custodian
+  phd-conditions: &phd-conditions
+    - region: us-east-1 # global resource
+    - type: value
+      key: account_id
+      op: in
+      value: ["101300729637"] # only run in production
+
+policies:
+  - name: aws-account-root-user-login-detected
+    conditions:
+      - region: us-east-1 # global resource
+    resource: account
+    description: |
+      Notifies of any AWS root user console logins
+    mode:
+      type: cloudtrail
+      events:
+        - ConsoleLogin
+      role: arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole
+      tags: *tags
+    filters:
+      - type: event
+        key: detail.userIdentity.type
+        value_type: swap
+        op: in
+        value: Root
+    actions:
+      - type: notify
+        violation_desc: |
+          A user has logged into the AWS Console with the Root user
+        action_desc: |
+          Please investigate and if needed revoke the root users session along
+          with any other restrictive actions if it's an unapproved root login
+
+  - name: aws-phd-health-event-issue
+    conditions:
+      *phd-conditions
+    resource: aws.health-event
+    description: |
+      Notifies of Personal Health Dashboard issue events
+    mode:
+      type: periodic
+      schedule: cron(0/30, *, *, *, ?, *) # every 30 minutes
+      role: arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole
+      tags: *tags
+    filters:
+      - type: value
+        key: eventTypeCategory
+        value: issue
+      # - type: value
+      #   key: statusCode
+      #   value: open
+      - type: value 
+        key: lastUpdatedTime
+        op: less-than
+        value_type: age
+        value: 0.021 # roughly within the last 30 mins (1 = 1 day)
+      - type: value
+        key: region
+        op: in
+        value: [global, us-east-1, us-west-2, us-east-2]
+    actions:
+      - type: notify
+        title: PHD - Operational Issue Notification
+        action_desc: See Personal Health Dashboard 'Open and recent issues' tab @ https://health.aws.amazon.com for more info.
+
+  - name: aws-phd-health-event-scheduled-change
+    conditions:
+      *phd-conditions
+    resource: aws.health-event
+    description: |
+      Notifies of Personal Health Dashboard scheduled change events
+    mode:
+      type: periodic
+      schedule: cron(0, 12, *, *, ?, *) # every day at 12:00 UTC
+      role: arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole
+      tags: *tags
+    filters:
+      - type: value
+        key: eventTypeCategory
+        value: scheduledChange
+      - type: value
+        key: statusCode
+        value: open
+      - type: value 
+        key: lastUpdatedTime
+        op: less-than
+        value_type: age
+        value: 1 # within the last day
+    actions:
+      - type: notify
+        title: PHD - Scheduled Change Notification
+        action_desc: See Personal Health Dashboard 'Scheduled changes' tab @ https://health.aws.amazon.com for more info.
+
+  - name: aws-phd-health-event-account-notification
+    conditions:
+      *phd-conditions
+    resource: aws.health-event
+    description: |
+      Notifies of Personal Health Dashboard account notification events
+    mode:
+      type: periodic
+      schedule: cron(0, 12, *, *, ?, *) # every day at 12:00 UTC
+      role: arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole
+      tags: *tags
+    filters:
+      - type: value
+        key: eventTypeCategory
+        value: accountNotification
+      - type: value
+        key: statusCode
+        value: open
+      - type: value 
+        key: lastUpdatedTime
+        op: less-than
+        value_type: age
+        value: 1 # within the last day
+    actions:
+      - type: notify
+        title: PHD - Account Notification
+        action_desc: See Personal Health Dashboard 'Other notifications' tab @ https://health.aws.amazon.com for more info.

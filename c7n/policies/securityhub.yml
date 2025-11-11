@@ -1,0 +1,51 @@
+vars:
+  tags: &tags
+    contact: ysrinu95@gmail.com
+    environment: "production"
+    repo: ysrinu95/cloud-custodian
+  email-notify: &email-notify
+    template: aws-basic_email.html
+    to:
+      - ysrinu95@gmail.com
+      - event-owner
+      - resource-owner
+    transport:
+      type: sqs
+      queue: https://sqs.us-west-2.amazonaws.com/YOUR_AWS_ACCOUNT_ID/custodian-mailer-queue
+  audit-only-condition: &audit-only-condition # only run in audit account
+    - type: value
+      key: account_id
+      op: in
+      value: ["605289256863"]
+
+policies:
+  - name: aws-security-hub-critical-findings
+    resource: aws.securityhub-finding
+    conditions: 
+      *audit-only-condition
+    description: |
+      Notifies of new critical findings in Security Hub
+    mode:
+      type: periodic
+      schedule: cron(0, 10, *, *, ?, *) # every day at 10:00 UTC
+      role: arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole
+      tags: *tags
+    query:
+      - Filters:
+          SeverityLabel:
+            - Comparison: EQUALS
+              Value: CRITICAL
+          WorkflowStatus:
+            - Comparison: EQUALS
+              Value: NEW
+          RecordState:
+            - Comparison: EQUALS
+              Value: ACTIVE
+          # temporarily filter out findings from Amazon Inspector & SSM Patch Manager
+          ProductName:
+            - Comparison: NOT_EQUALS
+              Value: Inspector
+            - Comparison: NOT_EQUALS
+              Value: Systems Manager Patch Manager
+    actions:
+      - type: notify

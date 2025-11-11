@@ -1,0 +1,121 @@
+vars:
+  tags: &tags
+    contact: ysrinu95@gmail.com
+    environment: "production"
+    repo: ysrinu95/cloud-custodian
+  email-notify: &email-notify
+    template: aws-basic_email.html
+    to:
+      - ysrinu95@gmail.com
+      - event-owner
+      - resource-owner
+    transport:
+      type: sqs
+      queue: https://sqs.us-west-2.amazonaws.com/YOUR_AWS_ACCOUNT_ID/custodian-mailer-queue
+
+policies:
+  - name: aws-ecs-long-running-airflow-tasks
+    resource: aws.ecs-task
+    description: |
+      Notifies of and stops Airflow ECS tasks that have been running for more than 18 hours
+    mode:
+      type: periodic
+      schedule: cron(0/30, *, *, *, ?, *) # every 30 minutes
+      role: arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole
+      tags: *tags
+    filters:
+      - type: value
+        key: startedBy
+        value: airflow
+      - type: value
+        value_type: age
+        key: startedAt
+        op: gt
+        value: 1.4 # 33.6 hours
+      - type: value
+        key: lastStatus
+        value: running
+        value_type: normalize
+      - tag:c7n-exception:long-running: absent
+    actions:
+      - type: stop
+      - type: notify
+        violation_desc: |
+          Airflow ECS tasks have been running for more than 18 hours
+        action_desc: |
+          ECS tasks have been stopped.
+
+  - name: aws-ecs-service-deployment-failures
+    resource: aws.ecs-service
+    description: |
+      Notifies of and stops ECS service deployments with more than 10 failed attempts
+    mode:
+      type: periodic
+      schedule: cron(0/30, *, *, *, ?, *) # every 30 minutes
+      role: arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole
+      tags: *tags
+    filters:
+      - type: list-item
+        key: deployments
+        attrs:
+          - type: value
+            key: status
+            value: primary
+            value_type: normalize
+          - type: value
+            key: rolloutState
+            value: in_progress
+            value_type: normalize
+          - type: value
+            key: failedTasks
+            op: gt
+            value: 10
+    actions:
+      # update service desired count
+      - type: modify
+        update:
+          desiredCount: 0
+      # update scaling policy, if exists
+      - type: resize
+        # min-capacity: 0
+        # max-capacity: 0
+        # desired: 0
+        # save-options-tag: CapacityBeforeResize
+        suspend-scaling: true
+      - type: notify
+        <<: *email-notify
+        priority_header: 1
+        subject: "[c7n] [{{ account }}] Excessive ECS Service Deployment Failures ({{ region }})"
+        violation_desc: ECS service deployment detected with over 10 failures
+        action_desc: |
+          ECS service desired count has been set to 0 and any autoscaling suspended. Please investigate the failures.
+          
+  - name: aws-ecs-long-running-data-schema-tasks
+    resource: aws.ecs-task
+    description: |
+      Notifies of and stops Data Schema ECS tasks that have been running for more than 1 hour
+    mode:
+      type: periodic
+      schedule: cron(0/30, *, *, *, ?, *) # every 30 minutes
+      role: arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole
+      tags: *tags
+    filters:
+      - type: value
+        key: clusterArn
+        op: contains
+        value: data_schema
+      - type: value
+        value_type: age
+        key: startedAt
+        op: gt
+        value: 0.042 # 1 Hour
+      - type: value
+        key: lastStatus
+        value: running
+        value_type: normalize
+      - tag:c7n-exception:long-running: absent
+    actions:
+      - type: stop
+      - type: notify
+        action_desc: |
+          ECS tasks have been stopped.          

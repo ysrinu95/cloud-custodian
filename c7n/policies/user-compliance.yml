@@ -1,0 +1,189 @@
+policies:
+  # Security Policy: Find untagged EC2 instances
+  - name: ec2-untagged-instances
+    description: |
+      Find EC2 instances that are missing required tags.
+      This is a common compliance requirement for cost allocation and governance.
+    resource: aws.ec2
+    filters:
+      # Instance must be running
+      - "State.Name": running
+      # Missing Environment tag
+      - "tag:Environment": absent
+    actions:
+      # Tag the instance for review
+      - type: tag
+        key: ComplianceStatus
+        value: NonCompliant-MissingTags
+      # Notify via SNS (uncomment when SNS topic is created)
+      # - type: notify
+      #   template: default
+      #   priority_header: '1'
+      #   subject: 'Cloud Custodian: Untagged EC2 Instance Found'
+      #   to:
+      #     - resource-owner
+      #   transport:
+      #     type: sns
+      #     topic: arn:aws:sns:us-east-1:172327596604:cloud-custodian-notifications
+      #   violation_desc: 'EC2 instance is missing required Environment tag'
+
+  # Cost Optimization: Find oversized EBS volumes
+  - name: ebs-oversized-volumes
+    description: |
+      Find EBS volumes larger than 100GB that are available (unattached).
+      These might be candidates for cost optimization.
+    resource: aws.ebs
+    filters:
+      # Volume must be available (not attached)
+      - "State": available
+      # Size greater than 100GB
+      - type: value
+        key: Size
+        op: gt
+        value: 100
+    actions:
+      # Tag for review
+      - type: tag
+        key: CostOptimization
+        value: LargeUnusedVolume
+      # Create snapshot before any action
+      - type: snapshot
+
+  # Security Policy: S3 buckets without encryption
+  - name: s3-unencrypted-buckets
+    description: |
+      Find S3 buckets that don't have default encryption enabled.
+      This is a security best practice to protect data at rest.
+    resource: aws.s3
+    filters:
+      # Check for default encryption
+      - type: bucket-encryption
+        state: false
+      # Exclude buckets with specific names (if needed)
+      - type: value
+        key: Name
+        op: not-in
+        value:
+          - aws-cloudtrail-logs
+          - aws-config-bucket
+    actions:
+      # Enable default AES256 encryption
+      - type: set-bucket-encryption
+        crypto: AES256
+      # Tag bucket for compliance tracking
+      - type: tag
+        key: EncryptionEnabled
+        value: 'true'
+
+  # Security Policy: Security groups with unrestricted SSH access
+  - name: security-groups-ssh-unrestricted
+    description: |
+      Find security groups that allow SSH (port 22) access from anywhere (0.0.0.0/0).
+      This is a security risk and should be restricted.
+    resource: aws.security-group
+    filters:
+      # Has rules allowing SSH from anywhere
+      - type: ingress
+        Ports: [22]
+        Cidr: "0.0.0.0/0"
+    actions:
+      # Tag for review
+      - type: tag
+        key: SecurityRisk
+        value: UnrestrictedSSH
+      # Remove the unrestricted rule (uncomment if you want to auto-remediate)
+      # - type: remove-permissions
+      #   ingress: matched
+
+  # Cost Optimization: Old unused EIPs
+  - name: elastic-ips-unused
+    description: |
+      Find Elastic IP addresses that are allocated but not associated
+      with any instance. These incur charges without providing value.
+    resource: aws.elastic-ip
+    filters:
+      # Not associated with any instance
+      - "AssociationId": absent
+    actions:
+      # Tag for review
+      - type: tag
+        key: CostOptimization
+        value: UnusedEIP
+      # Auto-release after tagging (uncomment if you want auto-remediation)
+      # - type: release
+
+  # Compliance Policy: RDS instances without backup
+  - name: rds-backup-disabled
+    description: |
+      Find RDS instances that don't have automated backups enabled.
+      This is important for data protection and compliance.
+    resource: aws.rds
+    filters:
+      # Backup retention period is 0 (disabled)
+      - "BackupRetentionPeriod": 0
+      # Not a read replica
+      - "ReadReplicaSourceDBInstanceIdentifier": absent
+    actions:
+      # Tag for review
+      - type: tag
+        key: ComplianceIssue
+        value: BackupDisabled
+      # Enable backup with 7-day retention (uncomment if you want auto-remediation)
+      # - type: modify-db
+      #   backup-retention-period: 7
+
+  # Security Policy: Lambda functions with public access
+  - name: lambda-public-access
+    description: |
+      Find Lambda functions that have resource-based policies
+      allowing public access. This could be a security risk.
+    resource: aws.lambda
+    filters:
+      # Has a resource policy with public access
+      - type: cross-account
+        whitelist: []
+    actions:
+      # Tag for security review
+      - type: tag
+        key: SecurityReview
+        value: PublicAccess
+
+  # Cost Optimization: Stopped EC2 instances
+  - name: ec2-stopped-instances-old
+    description: |
+      Find EC2 instances that have been stopped for more than 30 days.
+      These might be candidates for termination to save costs.
+    resource: aws.ec2
+    filters:
+      # Instance is stopped
+      - "State.Name": stopped
+      # Stopped for more than 30 days
+      - type: state-age
+        days: 30
+    actions:
+      # Tag for review
+      - type: tag
+        key: CostOptimization
+        value: LongStoppedInstance
+      # Mark for termination in 7 days (uncomment if you want auto-remediation)
+      # - type: mark-for-op
+      #   op: terminate
+      #   days: 7
+
+  # Security Policy: IAM users with old access keys
+  - name: iam-users-old-access-keys
+    description: |
+      Find IAM users with access keys that haven't been rotated
+      in more than 90 days. This is a security best practice.
+    resource: aws.iam-user
+    filters:
+      # Has access keys older than 90 days
+      - type: access-key
+        key: age
+        value: 90
+        op: gte
+    actions:
+      # Tag for review
+      - type: tag
+        key: SecurityAction
+        value: RotateAccessKeys

@@ -11,8 +11,8 @@ policies: []
 #     mode:
 #       type: periodic
 #       schedule: rate(1 day)
-# 
+#       role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
 #       tags:
-#         contact: ysrinu95@gmail.com
+#         contact: devops@yourcompany.com
 #         environment: "{environment}"
 #         repo: devops/cloud-custodian

@@ -1,8 +1,8 @@
 vars:
   tags: &tags
     contact: ysrinu95@gmail.com
-    environment: "engg"
-    repo: devops/cloud-custodian/c7n
+    environment: "production"
+    repo: ysrinu95/cloud-custodian
   email-notify: &email-notify
     template: aws-basic_email.html
     to:
@@ -11,7 +11,7 @@ vars:
       - resource-owner
     transport:
       type: sqs
-      queue: https://sqs.us-east-1.amazonaws.com/172327596604/custodian-mailer-queue
+      queue: https://sqs.us-west-2.amazonaws.com/YOUR_AWS_ACCOUNT_ID/custodian-mailer-queue
 
 policies:
   - name: aws-ec2-public-ips
@@ -50,7 +50,7 @@ policies:
         key: detail.requestParameters.networkInterfaceSet.items[].associatePublicIpAddress
         value: true
     actions:
-      - type: terminate
+      - type: stop
         force: true
       - type: notify
         <<: *email-notify
@@ -70,7 +70,7 @@ policies:
   #   mode:
   #     type: periodic
   #     schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
-
+  #     role: arn:aws:iam::{account_id}:role/devops/cloud-custodian
   #     tags: *tags
   #   filters:
   #     - unused

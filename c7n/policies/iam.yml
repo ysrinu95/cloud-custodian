@@ -1,0 +1,405 @@
+vars:
+  tags: &tags
+    contact: ysrinu95@gmail.com
+    environment: "production"
+    repo: ysrinu95/cloud-custodian
+  email-notify: &email-notify
+    template: aws-basic_email.html
+    to:
+      - ysrinu95@gmail.com
+      - event-owner
+      - resource-owner
+    transport:
+      type: sqs
+      queue: https://sqs.us-west-2.amazonaws.com/YOUR_AWS_ACCOUNT_ID/custodian-mailer-queue
+
+policies:
+  - name: aws-iam-user-inactive-access-keys
+    conditions:
+      - region: us-east-1 # global resource
+    resource: aws.iam-user
+    description: |
+      Notifies of and disables IAM access keys found to be unused
+    mode:
+      type: periodic
+      schedule: cron(0, 23, *, *, ?, *) # daily at 23:00 UTC
+      role: arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole
+      tags: *tags
+    filters:
+      - type: credential
+        key: access_keys.active
+        value: true
+        op: eq
+      - type: credential
+        key: access_keys.last_used_date
+        value_type: age
+        value: 90
+        op: gt
+      # https://github.com/cloud-custodian/cloud-custodian/issues/7833#issuecomment-1602019650
+      - type: value
+        key: length("c7n:matched-keys")
+        value: 1
+        op: gte
+      # Exclude data squad - https://greenst.atlassian.net/browse/DEVOPSENG-879
+      - type: value
+        key: tag:squad
+        value: data
+        op: ne
+    actions:
+      - type: remove-keys
+        matched: true
+        disable: true
+      - type: notify
+        <<: *email-notify
+        subject: "[c7n] [{{ account }}] IAM Users With Access Keys Not Recently Used"
+        violation_desc: IAM user access keys not used in the last 90 days
+        action_desc: |
+          Unused IAM access keys have been disabled.<br>
+          If the user is still needed, consider switching it to an IAM role instead.
+      - type: notify        violation_desc: |
+          IAM user access keys not used in the last 90 days
+        action_desc: |
+          Unused IAM access keys have been disabled.
+
+  - name: aws-iam-policy-allow-all-report
+    conditions:
+      - region: us-east-1 # global resource
+    resource: aws.iam-policy
+    description: |
+      Notifies of IAM policies which allow all permissions
+    mode:
+      type: periodic
+      schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
+      role: arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole
+      tags: *tags
+    filters:
+      - type: check-permissions
+        match: allowed
+        actions:
+          - '*:*'
+      - tag:c7n-exception:iam-admin: absent
+    actions:
+      - type: notify
+        <<: *email-notify
+        subject: "[c7n] [{{ account }}] IAM Policies Which Allow All Permissions"
+        violation_desc: IAM policy not following a least-privilege model
+        action_desc: |
+          Please update the resources to follow a least-privilege model.<br>
+          <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html#grant-least-privilege">Documentation</a>
+
+  - name: aws-iam-role-admin-access-report
+    conditions:
+      - region: us-east-1 # global resource
+    resource: aws.iam-role
+    description: |
+      Notifies of IAM roles with administrator permissions
+    mode:
+      type: periodic
+      schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
+      role: arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole
+      tags: *tags
+    filters:
+      - or:
+        - type: has-specific-managed-policy
+          value: AdministratorAccess
+        - type: check-permissions
+          match: allowed
+          actions:
+            - '*:*'
+      - tag:c7n-exception:iam-admin: absent
+      # exclude known AWS auto-generated roles
+      - not:
+        - type: value
+          key: RoleName
+          op: regex
+          value: '(AWSReservedSSO_)\w+'
+    actions:
+      - type: notify
+        <<: *email-notify
+        subject: "[c7n] [{{ account }}] IAM Roles With Administrator Permissions"
+        violation_desc: IAM principal not following a least-privilege model
+        action_desc: |
+          Please update the resources to follow a least-privilege model.<br>
+          <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html#grant-least-privilege">Documentation</a>
+
+  - name: aws-iam-user-admin-access-report
+    conditions:
+      - region: us-east-1 # global resource
+    resource: aws.iam-user
+    description: |
+      Notifies of IAM users with administrator permissions
+    mode:
+      type: periodic
+      schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
+      role: arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole
+      tags: *tags
+    filters:
+      - or:
+        - type: policy
+          key: PolicyName
+          value: AdministratorAccess
+          include-via: true
+        - type: check-permissions
+          match: allowed
+          actions:
+            - '*:*'
+      - tag:c7n-exception:iam-admin: absent
+    actions:
+      - type: notify
+        <<: *email-notify
+        subject: "[c7n] [{{ account }}] IAM Users With Administrator Permissions"
+        violation_desc: IAM principal not following a least-privilege model
+        action_desc: |
+          Please update the resources to follow a least-privilege model.<br>
+          <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html#grant-least-privilege">Documentation</a>
+
+  - name: aws-iam-group-admin-access-report
+    conditions:
+      - region: us-east-1 # global resource
+    resource: aws.iam-group
+    description: |
+      Notifies of IAM groups with administrator permissions
+    mode:
+      type: periodic
+      schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
+      role: arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole
+      tags: *tags
+    filters:
+      - or:
+        - type: has-specific-managed-policy
+          value: AdministratorAccess
+        - type: check-permissions
+          match: allowed
+          actions:
+            - '*:*'
+    actions:
+      - type: notify
+        <<: *email-notify
+        subject: "[c7n] [{{ account }}] IAM Groups With Administrator Permissions"
+        violation_desc: IAM principal not following a least-privilege model
+        action_desc: |
+          Please update the resources to follow a least-privilege model.<br>
+          <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html#grant-least-privilege">Documentation</a>
+
+  - name: aws-iam-policy-allow-all-created
+    conditions:
+      - region: us-east-1 # global resource
+    resource: aws.iam-policy
+    description: |
+      Notifies of IAM policy created which allows all permissions
+    mode:
+      type: cloudtrail
+      role: arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole
+      events:
+        - event: CreatePolicy
+          source: iam.amazonaws.com
+          ids: "requestParameters.policyDocument"
+        - event: CreatePolicyVersion
+          source: iam.amazonaws.com
+          ids: "requestParameters.policyDocument"
+    filters:
+      - type: check-permissions
+        match: allowed
+        actions:
+          - '*:*'
+      - tag:c7n-exception:iam-admin: absent
+    actions:
+      - type: notify
+        <<: *email-notify
+        subject: "[c7n] [{{ account }}] IAM Policiy Created Which Allows All Permissions"
+        violation_desc: IAM policy not following a least-privilege model
+        action_desc: |
+          Please update the resource to follow a least-privilege model.<br>
+          <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html#grant-least-privilege">Documentation</a>
+
+  - name: aws-iam-role-admin-access-attached
+    conditions:
+      - region: us-east-1 # global resource
+    resource: aws.iam-role
+    description: |
+      Notifies of administrator policy being attached to IAM role
+    mode:
+      type: cloudtrail
+      role: arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole
+      events:
+        # managed policies
+        - event: AttachRolePolicy
+          source: iam.amazonaws.com
+          ids: "requestParameters.roleName"
+        # inline policies
+        - event: PutRolePolicy
+          source: iam.amazonaws.com
+          ids: "requestParameters.roleName"
+    filters:
+      - or:
+        - type: event
+          key: "detail.requestParameters.policyArn"
+          op: eq
+          value: "arn:aws:iam::aws:policy/AdministratorAccess"
+        - type: check-permissions
+          match: allowed
+          actions:
+            - '*:*'
+      - tag:c7n-exception:iam-admin: absent
+      # exclude known AWS auto-generated roles
+      - not:
+        - type: value
+          key: RoleName
+          op: regex
+          value: '(AWSReservedSSO_)\w+'
+    actions:
+      - type: notify
+        <<: *email-notify
+        subject: "[c7n] [{{ account }}] Administrator Policy Attached To IAM Role"
+        violation_desc: IAM principal not following a least-privilege model
+        action_desc: |
+          Please update the resource to follow a least-privilege model.<br>
+          <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html#grant-least-privilege">Documentation</a>
+
+  - name: aws-iam-user-admin-access-attached
+    conditions:
+      - region: us-east-1 # global resource
+    resource: aws.iam-user
+    description: |
+      Notifies of administrator policy being attached to IAM user
+    mode:
+      type: cloudtrail
+      role: arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole
+      events:
+        # managed policies
+        - event: AttachUserPolicy
+          source: iam.amazonaws.com
+          ids: "requestParameters.roleName"
+        # inline policies
+        - event: PutUserPolicy
+          source: iam.amazonaws.com
+          ids: "requestParameters.roleName"
+    filters:
+      - or:
+        - type: event
+          key: "detail.requestParameters.policyArn"
+          op: eq
+          value: "arn:aws:iam::aws:policy/AdministratorAccess"
+        - type: check-permissions
+          match: allowed
+          actions:
+            - '*:*'
+      - tag:c7n-exception:iam-admin: absent
+    actions:
+      - type: notify
+        <<: *email-notify
+        subject: "[c7n] [{{ account }}] Administrator Policy Attached To IAM Role"
+        violation_desc: IAM principal not following a least-privilege model
+        action_desc: |
+          Please update the resource to follow a least-privilege model.<br>
+          <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html#grant-least-privilege">Documentation</a>
+
+  - name: aws-iam-group-admin-access-attached
+    conditions:
+      - region: us-east-1 # global resource
+    resource: aws.iam-group
+    description: |
+      Notifies of administrator policy being attached to IAM group
+    mode:
+      type: cloudtrail
+      role: arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole
+      events:
+        # managed policies
+        - event: AttachGroupPolicy
+          source: iam.amazonaws.com
+          ids: "requestParameters.roleName"
+        # inline policies
+        - event: PutGroupPolicy
+          source: iam.amazonaws.com
+          ids: "requestParameters.roleName"
+    filters:
+      - or:
+        - type: event
+          key: "detail.requestParameters.policyArn"
+          op: eq
+          value: "arn:aws:iam::aws:policy/AdministratorAccess"
+        - type: check-permissions
+          match: allowed
+          actions:
+            - '*:*'
+    actions:
+      - type: notify
+        <<: *email-notify
+        subject: "[c7n] [{{ account }}] Administrator Policy Attached To IAM Role"
+        violation_desc: IAM principal not following a least-privilege model
+        action_desc: |
+          Please update the resource to follow a least-privilege model.<br>
+          <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html#grant-least-privilege">Documentation</a>
+
+  - name: aws-iam-unused-roles-report
+    conditions:
+      - region: us-east-1 # global resource
+    resource: aws.iam-role
+    description: |
+      Notifies of IAM roles found to be unused
+    mode:
+      type: periodic
+      schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
+      role: arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole
+      tags: *tags
+    filters:
+      - type: usage
+        match-operator: all
+        LastAuthenticated: null
+      # exclude roles created in the past year
+      - type: value
+        key: CreateDate
+        op: gt
+        value: 365
+        value_type: age
+      - tag:c7n-exception:unused: absent
+    actions:
+      - type: notify
+        <<: *email-notify
+        subject: "[c7n] [{{ account }}] IAM Roles Are Unused"
+        violation_desc: IAM Roles that appear to be unused
+        action_desc: |
+          No action taken.<br>
+          As a best practice, delete roles that are no longer in use.<br>
+
+  - name: aws-iam-unused-policies-report
+    conditions:
+      - region: us-east-1 # global resource
+    resource: aws.iam-policy
+    description: |
+      Notifies of IAM policies found to be unused
+    mode:
+      type: periodic
+      schedule: cron(0, 23, ?, *, SUN, *) # every Sunday at 23:00 UTC
+      role: arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole
+      tags: *tags
+    filters:
+      - type: unused
+      - tag:c7n-exception:unused: absent
+    actions:
+      - type: notify
+        <<: *email-notify
+        subject: "[c7n] [{{ account }}] IAM Policies Are Unused"
+        violation_desc: IAM policies that appear to be unused
+        action_desc: |
+          No action taken.<br>
+          If the policy is still needed, please attach to the required IAM role.
+
+  - name: aws-iam-new-user-created
+    conditions:
+      - region: us-east-1 # global resource
+    resource: aws.iam-user
+    description: |
+      Notifies of new IAM user creation
+    mode:
+      type: cloudtrail
+      role: arn:aws:iam::172327596604:role/CloudCustodian-ExecutionRole
+      events:
+        - event: CreateUser
+          source: iam.amazonaws.com
+          ids: responseElements.user.userName
+    actions:
+      - type: notify        violation_desc: |
+          New IAM user created
+        action_desc: |
+          Please investigate - IAM Users should be used as a last resort
