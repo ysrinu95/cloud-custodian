@@ -46,7 +46,13 @@ for FILE in $policy_dir/*.yml; do
     echo "📄 Deploying policy file: $FILE"
     
     # Check if file has any policies (not empty or baseline)
-    policy_count=$(grep -c "^  - name:" "$FILE" 2>/dev/null || echo "0")
+    # Use tr to remove any whitespace/newlines and ensure we get a clean number
+    policy_count=$(grep -c "^  - name:" "$FILE" 2>/dev/null | tr -d '[:space:]' || echo "0")
+    
+    # Ensure policy_count is a valid integer
+    if ! [[ "$policy_count" =~ ^[0-9]+$ ]]; then
+      policy_count=0
+    fi
     
     if [ "$policy_count" -eq 0 ]; then
       echo "⚠️  Skipping $FILE (no policies found or baseline file)"
