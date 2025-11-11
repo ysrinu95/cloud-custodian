@@ -962,11 +962,19 @@ jobs:
           echo "✅ Installation complete"
           custodian version
       
-      - name: Make Scripts Executable
+      - name: Fix Line Endings and Make Scripts Executable
         run: |
+          echo "🔧 Converting line endings from CRLF to LF..."
+          # Install dos2unix if not available
+          sudo apt-get update && sudo apt-get install -y dos2unix
+          
+          # Convert all shell scripts to Unix line endings
+          find c7n/scripts -name "*.sh" -type f -exec dos2unix {} \;
+          
           echo "🔧 Making c7n scripts executable..."
           chmod +x c7n/scripts/*.sh
-          echo "✅ Scripts are now executable"
+          
+          echo "✅ Scripts are now executable with correct line endings"
       
       - name: Set Deployment Environment Variables
         run: |
