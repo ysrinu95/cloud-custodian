@@ -3,6 +3,15 @@ vars:
     contact: ysrinu95@gmail.com
     environment: "production"
     repo: ysrinu95/cloud-custodian
+  email-notify: &email-notify
+    template: aws-basic_email.html
+    to:
+      - ysrinu95@gmail.com
+      - event-owner
+      - resource-owner
+    transport:
+      type: sqs
+      queue: https://sqs.us-west-2.amazonaws.com/172327596604/custodian-mailer-queue
 
 policies:
   # RDS schedules
