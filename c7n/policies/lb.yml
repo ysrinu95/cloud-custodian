@@ -11,7 +11,7 @@ vars:
       - resource-owner
     transport:
       type: sqs
-      queue: https://sqs.us-west-2.amazonaws.com/YOUR_AWS_ACCOUNT_ID/custodian-mailer-queue
+      queue: https://sqs.us-west-2.amazonaws.com/172327596604/custodian-mailer-queue
       
 policies:  
   - name: aws-elb-outdated-tls-protocols
@@ -88,7 +88,9 @@ policies:
         op: eq
         value: "internet-facing"            
     actions:
-      - type: notify        violation_desc: |
+      - type: notify
+        <<: *email-notify
+        violation_desc: |
           Internet Facing Load Balancer is created
         action_desc: |
           No action taken. Please check that this was intentional.          

@@ -11,7 +11,7 @@ vars:
       - resource-owner
     transport:
       type: sqs
-      queue: https://sqs.us-west-2.amazonaws.com/YOUR_AWS_ACCOUNT_ID/custodian-mailer-queue
+      queue: https://sqs.us-west-2.amazonaws.com/172327596604/custodian-mailer-queue
 
 policies:
   - name: aws-cloudwatch-stale-log-groups

@@ -11,7 +11,7 @@ vars:
       - resource-owner
     transport:
       type: sqs
-      queue: https://sqs.us-west-2.amazonaws.com/YOUR_AWS_ACCOUNT_ID/custodian-mailer-queue
+      queue: https://sqs.us-west-2.amazonaws.com/172327596604/custodian-mailer-queue
   audit-only-condition: &audit-only-condition # only run in audit account
     - type: value
       key: account_id
@@ -35,7 +35,9 @@ policies:
         op: gte
         value: 4.5 # medium and high severity
     actions:
-      - type: notify        violation_desc: |
+      - type: notify
+        <<: *email-notify
+        violation_desc: |
           New GuardDuty finding received - Account
         action_desc: |
           Please investigate.
@@ -57,7 +59,9 @@ policies:
         op: gte
         value: 4.5 # medium and high severity
     actions:
-      - type: notify        violation_desc: |
+      - type: notify
+        <<: *email-notify
+        violation_desc: |
           New GuardDuty finding received - IAM user
         action_desc: |
           Please investigate.
@@ -79,7 +83,9 @@ policies:
         op: gte
         value: 4.5 # medium and high severity
     actions:
-      - type: notify        violation_desc: |
+      - type: notify
+        <<: *email-notify
+        violation_desc: |
           New GuardDuty finding received - EC2
         action_desc: |
           Please investigate.

@@ -11,7 +11,7 @@ vars:
       - resource-owner
     transport:
       type: sqs
-      queue: https://sqs.us-west-2.amazonaws.com/YOUR_AWS_ACCOUNT_ID/custodian-mailer-queue
+      queue: https://sqs.us-west-2.amazonaws.com/172327596604/custodian-mailer-queue
 
 policies:
   - name: aws-iam-user-inactive-access-keys
@@ -56,7 +56,9 @@ policies:
         action_desc: |
           Unused IAM access keys have been disabled.<br>
           If the user is still needed, consider switching it to an IAM role instead.
-      - type: notify        violation_desc: |
+      - type: notify
+        <<: *email-notify
+        violation_desc: |
           IAM user access keys not used in the last 90 days
         action_desc: |
           Unused IAM access keys have been disabled.
@@ -399,7 +401,9 @@ policies:
           source: iam.amazonaws.com
           ids: responseElements.user.userName
     actions:
-      - type: notify        violation_desc: |
+      - type: notify
+        <<: *email-notify
+        violation_desc: |
           New IAM user created
         action_desc: |
           Please investigate - IAM Users should be used as a last resort

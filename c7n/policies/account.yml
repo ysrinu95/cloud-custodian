@@ -3,6 +3,15 @@ vars:
     contact: ysrinu95@gmail.com
     environment: "production"
     repo: ysrinu95/cloud-custodian
+  email-notify: &email-notify
+    template: aws-basic_email.html
+    to:
+      - ysrinu95@gmail.com
+      - event-owner
+      - resource-owner
+    transport:
+      type: sqs
+      queue: https://sqs.us-west-2.amazonaws.com/172327596604/custodian-mailer-queue
   phd-conditions: &phd-conditions
     - region: us-east-1 # global resource
     - type: value
@@ -31,6 +40,7 @@ policies:
         value: Root
     actions:
       - type: notify
+        <<: *email-notify
         violation_desc: |
           A user has logged into the AWS Console with the Root user
         action_desc: |
@@ -66,6 +76,7 @@ policies:
         value: [global, us-east-1, us-west-2, us-east-2]
     actions:
       - type: notify
+        <<: *email-notify
         title: PHD - Operational Issue Notification
         action_desc: See Personal Health Dashboard 'Open and recent issues' tab @ https://health.aws.amazon.com for more info.
 
@@ -94,6 +105,7 @@ policies:
         value: 1 # within the last day
     actions:
       - type: notify
+        <<: *email-notify
         title: PHD - Scheduled Change Notification
         action_desc: See Personal Health Dashboard 'Scheduled changes' tab @ https://health.aws.amazon.com for more info.
 
@@ -122,5 +134,6 @@ policies:
         value: 1 # within the last day
     actions:
       - type: notify
+        <<: *email-notify
         title: PHD - Account Notification
         action_desc: See Personal Health Dashboard 'Other notifications' tab @ https://health.aws.amazon.com for more info.

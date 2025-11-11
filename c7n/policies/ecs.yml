@@ -11,7 +11,7 @@ vars:
       - resource-owner
     transport:
       type: sqs
-      queue: https://sqs.us-west-2.amazonaws.com/YOUR_AWS_ACCOUNT_ID/custodian-mailer-queue
+      queue: https://sqs.us-west-2.amazonaws.com/172327596604/custodian-mailer-queue
 
 policies:
   - name: aws-ecs-long-running-airflow-tasks
@@ -40,6 +40,7 @@ policies:
     actions:
       - type: stop
       - type: notify
+        <<: *email-notify
         violation_desc: |
           Airflow ECS tasks have been running for more than 18 hours
         action_desc: |

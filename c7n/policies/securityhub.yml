@@ -11,7 +11,7 @@ vars:
       - resource-owner
     transport:
       type: sqs
-      queue: https://sqs.us-west-2.amazonaws.com/YOUR_AWS_ACCOUNT_ID/custodian-mailer-queue
+      queue: https://sqs.us-west-2.amazonaws.com/172327596604/custodian-mailer-queue
   audit-only-condition: &audit-only-condition # only run in audit account
     - type: value
       key: account_id
@@ -49,3 +49,4 @@ policies:
               Value: Systems Manager Patch Manager
     actions:
       - type: notify
+        <<: *email-notify
