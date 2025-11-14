@@ -1355,6 +1355,14 @@ jobs:
           echo "  🔹 CloudWatch Log Groups: $LOG_GROUP_COUNT"
           echo ""
           
+          # Remove leading zeros to avoid octal interpretation errors
+          LAMBDA_COUNT=$((10#${LAMBDA_COUNT:-0}))
+          RULES_COUNT=$((10#${RULES_COUNT:-0}))
+          EC2_COUNT=$((10#${EC2_COUNT:-0}))
+          SG_COUNT=$((10#${SG_COUNT:-0}))
+          IAM_USER_COUNT=$((10#${IAM_USER_COUNT:-0}))
+          LOG_GROUP_COUNT=$((10#${LOG_GROUP_COUNT:-0}))
+          
           TOTAL_RESOURCES=$((LAMBDA_COUNT + RULES_COUNT + EC2_COUNT + SG_COUNT + IAM_USER_COUNT + LOG_GROUP_COUNT))
           
           if [[ "$TOTAL_RESOURCES" -eq 0 ]]; then
