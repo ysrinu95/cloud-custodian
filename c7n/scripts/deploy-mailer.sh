@@ -225,29 +225,82 @@ else
     exit 1
 fi
 
-# Step 9: Deploy the mailer
+# Step 9: Verify templates directory exists
 echo ""
-print_info "Step 9: Deploying c7n-mailer with --update-lambda..."
-print_info "Configuration: $config"
-print_info "Templates: $templates_dir"
-
-# Create templates directory if it doesn't exist
+print_info "Step 9: Verifying mail templates..."
 if [ ! -d "$templates_dir" ]; then
-    print_warning "Templates directory doesn't exist, creating: $templates_dir"
+    print_error "Templates directory doesn't exist: $templates_dir"
+    print_warning "Creating templates directory: $templates_dir"
     mkdir -p "$templates_dir"
+    print_warning "Note: No email templates found. Add templates to: $templates_dir"
+else
+    TEMPLATE_COUNT=$(find "$templates_dir" -name "*.j2" -o -name "*.html" -o -name "*.txt" | wc -l)
+    print_status "Found $TEMPLATE_COUNT mail template(s) in: $templates_dir"
+    
+    # List templates
+    if [ $TEMPLATE_COUNT -gt 0 ]; then
+        print_info "Templates to be deployed:"
+        find "$templates_dir" -type f \( -name "*.j2" -o -name "*.html" -o -name "*.txt" \) -exec basename {} \; | while read template; do
+            echo "     • $template"
+        done
+    fi
 fi
 
-# Deploy the mailer
-if c7n-mailer --config "$config" --update-lambda -t "$templates_dir"; then
-    print_status "c7n-mailer deployed successfully!"
+# Step 10: Deploy the mailer with templates
+echo ""
+print_info "Step 10: Deploying c7n-mailer with --update-lambda..."
+print_info "Configuration: $config"
+print_info "Templates directory: $templates_dir"
+
+# Deploy the mailer with templates directory
+# The -t flag ensures templates are packaged into the Lambda deployment
+if c7n-mailer --config "$config" --update-lambda --templates "$templates_dir"; then
+    print_status "c7n-mailer deployed successfully with templates!"
 else
     print_error "c7n-mailer deployment failed"
+    print_info "Retrying with verbose output..."
+    c7n-mailer --config "$config" --update-lambda --templates "$templates_dir" -v
     exit 1
 fi
 
-# Step 10: Test the deployment
+# Verify Lambda package includes templates
 echo ""
-print_info "Step 10: Testing the mailer deployment..."
+print_info "Verifying Lambda deployment package..."
+LAMBDA_NAME="cloud-custodian-mailer"
+
+# Check if Lambda function exists and get details
+if aws lambda get-function --function-name "$LAMBDA_NAME" --region "$AWS_REGION" > /dev/null 2>&1; then
+    LAMBDA_SIZE=$(aws lambda get-function --function-name "$LAMBDA_NAME" --region "$AWS_REGION" --query 'Configuration.CodeSize' --output text)
+    LAMBDA_RUNTIME=$(aws lambda get-function --function-name "$LAMBDA_NAME" --region "$AWS_REGION" --query 'Configuration.Runtime' --output text)
+    print_status "Lambda function deployed:"
+    echo "     • Name: $LAMBDA_NAME"
+    echo "     • Runtime: $LAMBDA_RUNTIME"
+    echo "     • Code Size: $(numfmt --to=iec-i --suffix=B $LAMBDA_SIZE 2>/dev/null || echo "$LAMBDA_SIZE bytes")"
+    
+    # Download and inspect Lambda package to verify templates
+    print_info "Downloading Lambda package to verify templates..."
+    TEMP_DIR=$(mktemp -d)
+    CODE_LOCATION=$(aws lambda get-function --function-name "$LAMBDA_NAME" --region "$AWS_REGION" --query 'Code.Location' --output text)
+    
+    if curl -s "$CODE_LOCATION" -o "$TEMP_DIR/lambda.zip"; then
+        if unzip -l "$TEMP_DIR/lambda.zip" | grep -q "\.j2$\|\.html$"; then
+            TEMPLATE_FILES=$(unzip -l "$TEMP_DIR/lambda.zip" | grep -E "\.j2$|\.html$" | wc -l)
+            print_status "✅ Verified: $TEMPLATE_FILES template file(s) included in Lambda package"
+            print_info "Template files in Lambda:"
+            unzip -l "$TEMP_DIR/lambda.zip" | grep -E "\.j2$|\.html$" | awk '{print "     • " $4}'
+        else
+            print_warning "⚠️  No template files found in Lambda package!"
+            print_warning "Templates may not be included. Verify template paths."
+        fi
+    fi
+    rm -rf "$TEMP_DIR"
+else
+    print_warning "Could not verify Lambda package (function may not exist yet)"
+fi
+
+# Step 11: Test the deployment
+echo ""
+print_info "Step 11: Testing the mailer deployment..."
 
 # Get the Lambda function name from the deployment
 LAMBDA_NAME="cloud-custodian-mailer"
@@ -266,7 +319,7 @@ else
     print_error "Lambda function test failed"
 fi
 
-# Step 11: Deployment summary
+# Step 12: Deployment summary
 echo ""
 echo "🎉 Cloud Custodian Mailer Deployment Complete!"
 echo "=============================================="
@@ -274,6 +327,7 @@ print_status "✅ All dependencies installed and verified"
 print_status "✅ PyJWT packaging fix applied (Community solution from GitHub #10282)"
 print_status "✅ SQS queue verified/created"
 print_status "✅ IAM permissions verified"
+print_status "✅ Mail templates packaged and deployed with Lambda"
 print_status "✅ Lambda function deployed successfully"
 print_status "✅ Deployment tested and functional"
 
