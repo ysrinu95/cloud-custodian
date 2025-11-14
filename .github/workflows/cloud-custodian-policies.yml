@@ -41,6 +41,7 @@ on:
         - cleanup-security-tests
         - cleanup-comprehensive
         - cleanup-scan
+        - cleanup-except-s3
       target_accounts:
         description: 'Target accounts (comma-separated, or "all")'
         required: false
@@ -1398,6 +1399,257 @@ jobs:
           echo "- **cleanup-demo-resources**: EC2/RDS/EBS demo resources" >> $GITHUB_STEP_SUMMARY
           echo "- **cleanup-security-tests**: Security Hub/GuardDuty/Config test resources" >> $GITHUB_STEP_SUMMARY
           echo "- **cleanup-comprehensive**: ALL Cloud Custodian resources" >> $GITHUB_STEP_SUMMARY
+
+  cleanup-except-s3:
+    name: 'Cleanup All Resources Except S3 Buckets'
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.operation_type == 'cleanup-except-s3'
+    
+    permissions:
+      id-token: write
+      contents: read
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-cleanup-except-s3-${{ github.run_number }}
+      
+      - name: Install Dependencies
+        run: |
+          pip install --upgrade pip
+          pip install c7n c7n-org c7n-mailer boto3
+          sudo apt-get update && sudo apt-get install -y jq
+      
+      - name: Cleanup All Resources Except S3
+        run: |
+          echo "🧹 Cleanup: Removing all Cloud Custodian resources EXCEPT S3 buckets"
+          echo "════════════════════════════════════════════════════════════════════"
+          echo "⚠️  This will remove Lambda functions, EventBridge rules, CloudWatch logs,"
+          echo "   EC2 instances, Security Groups, IAM resources, and other demo resources"
+          echo "   but will PRESERVE all S3 buckets"
+          echo ""
+          
+          export AWS_REGION="${{ env.AWS_REGION }}"
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          
+          echo "📊 AWS Context:"
+          echo "   Account: $ACCOUNT_ID"
+          echo "   Region: $AWS_REGION"
+          echo "   Time: $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
+          echo ""
+          
+          # Track cleanup results
+          DELETED_COUNT=0
+          FAILED_COUNT=0
+          
+          # Phase 1: Delete Lambda Functions
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Phase 1: Cleaning up Lambda Functions"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          LAMBDA_FUNCTIONS=$(aws lambda list-functions --region "$AWS_REGION" \
+            --query 'Functions[?starts_with(FunctionName, `custodian`)].FunctionName' \
+            --output text 2>/dev/null)
+          
+          if [[ -n "$LAMBDA_FUNCTIONS" ]]; then
+            for FUNC in $LAMBDA_FUNCTIONS; do
+              echo "🗑️  Deleting Lambda function: $FUNC"
+              if aws lambda delete-function --region "$AWS_REGION" --function-name "$FUNC" 2>/dev/null; then
+                echo "   ✅ Deleted: $FUNC"
+                ((DELETED_COUNT++))
+              else
+                echo "   ❌ Failed to delete: $FUNC"
+                ((FAILED_COUNT++))
+              fi
+            done
+          else
+            echo "✅ No Lambda functions found"
+          fi
+          echo ""
+          
+          # Phase 2: Delete EventBridge Rules
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Phase 2: Cleaning up EventBridge Rules"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          EVENT_RULES=$(aws events list-rules --region "$AWS_REGION" --name-prefix custodian \
+            --query 'Rules[].Name' --output text 2>/dev/null)
+          
+          if [[ -n "$EVENT_RULES" ]]; then
+            for RULE in $EVENT_RULES; do
+              echo "🗑️  Processing rule: $RULE"
+              
+              # Remove targets first
+              TARGETS=$(aws events list-targets-by-rule --region "$AWS_REGION" --rule "$RULE" \
+                --query 'Targets[].Id' --output text 2>/dev/null)
+              
+              if [[ -n "$TARGETS" ]]; then
+                echo "   📎 Removing targets from rule: $RULE"
+                aws events remove-targets --region "$AWS_REGION" --rule "$RULE" --ids $TARGETS 2>/dev/null
+              fi
+              
+              # Delete the rule
+              if aws events delete-rule --region "$AWS_REGION" --name "$RULE" 2>/dev/null; then
+                echo "   ✅ Deleted rule: $RULE"
+                ((DELETED_COUNT++))
+              else
+                echo "   ❌ Failed to delete rule: $RULE"
+                ((FAILED_COUNT++))
+              fi
+            done
+          else
+            echo "✅ No EventBridge rules found"
+          fi
+          echo ""
+          
+          # Phase 3: Delete CloudWatch Log Groups
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Phase 3: Cleaning up CloudWatch Log Groups"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          LOG_GROUPS=$(aws logs describe-log-groups --region "$AWS_REGION" \
+            --log-group-name-prefix '/aws/lambda/custodian-' \
+            --query 'logGroups[].logGroupName' --output text 2>/dev/null)
+          
+          if [[ -n "$LOG_GROUPS" ]]; then
+            for LOG_GROUP in $LOG_GROUPS; do
+              echo "🗑️  Deleting log group: $LOG_GROUP"
+              if aws logs delete-log-group --region "$AWS_REGION" --log-group-name "$LOG_GROUP" 2>/dev/null; then
+                echo "   ✅ Deleted: $LOG_GROUP"
+                ((DELETED_COUNT++))
+              else
+                echo "   ❌ Failed to delete: $LOG_GROUP"
+                ((FAILED_COUNT++))
+              fi
+            done
+          else
+            echo "✅ No CloudWatch log groups found"
+          fi
+          echo ""
+          
+          # Phase 4: Delete EC2 Instances (Demo/Test)
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Phase 4: Cleaning up EC2 Instances"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          EC2_INSTANCES=$(aws ec2 describe-instances --region "$AWS_REGION" \
+            --filters "Name=tag:TestResource,Values=true" "Name=instance-state-name,Values=running,stopped" \
+            --query 'Reservations[].Instances[].InstanceId' --output text 2>/dev/null)
+          
+          if [[ -n "$EC2_INSTANCES" ]]; then
+            echo "🗑️  Terminating EC2 instances: $EC2_INSTANCES"
+            if aws ec2 terminate-instances --region "$AWS_REGION" --instance-ids $EC2_INSTANCES 2>/dev/null; then
+              echo "   ✅ Terminated instances"
+              for INSTANCE in $EC2_INSTANCES; do
+                ((DELETED_COUNT++))
+              done
+            else
+              echo "   ❌ Failed to terminate instances"
+              ((FAILED_COUNT++))
+            fi
+          else
+            echo "✅ No EC2 instances found"
+          fi
+          echo ""
+          
+          # Phase 5: Delete Security Groups
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Phase 5: Cleaning up Security Groups"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "⏳ Waiting 30 seconds for EC2 instances to terminate..."
+          sleep 30
+          
+          SECURITY_GROUPS=$(aws ec2 describe-security-groups --region "$AWS_REGION" \
+            --filters "Name=group-name,Values=*demo*,*test*,*custodian*" \
+            --query 'SecurityGroups[?GroupName!=`default`].GroupId' --output text 2>/dev/null)
+          
+          if [[ -n "$SECURITY_GROUPS" ]]; then
+            for SG in $SECURITY_GROUPS; do
+              echo "🗑️  Deleting security group: $SG"
+              if aws ec2 delete-security-group --region "$AWS_REGION" --group-id "$SG" 2>/dev/null; then
+                echo "   ✅ Deleted: $SG"
+                ((DELETED_COUNT++))
+              else
+                echo "   ⚠️  Skipped (may be in use): $SG"
+              fi
+            done
+          else
+            echo "✅ No security groups found"
+          fi
+          echo ""
+          
+          # Phase 6: Delete IAM Test Users
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Phase 6: Cleaning up IAM Test Users"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          IAM_USERS=$(aws iam list-users \
+            --query 'Users[?starts_with(UserName, `custodian-test`)].UserName' \
+            --output text 2>/dev/null)
+          
+          if [[ -n "$IAM_USERS" ]]; then
+            for USER in $IAM_USERS; do
+              echo "🗑️  Deleting IAM user: $USER"
+              
+              # Delete access keys
+              ACCESS_KEYS=$(aws iam list-access-keys --user-name "$USER" \
+                --query 'AccessKeyMetadata[].AccessKeyId' --output text 2>/dev/null)
+              for KEY in $ACCESS_KEYS; do
+                aws iam delete-access-key --user-name "$USER" --access-key-id "$KEY" 2>/dev/null
+              done
+              
+              # Delete user
+              if aws iam delete-user --user-name "$USER" 2>/dev/null; then
+                echo "   ✅ Deleted: $USER"
+                ((DELETED_COUNT++))
+              else
+                echo "   ❌ Failed to delete: $USER"
+                ((FAILED_COUNT++))
+              fi
+            done
+          else
+            echo "✅ No IAM test users found"
+          fi
+          echo ""
+          
+          # Summary
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📊 CLEANUP SUMMARY (Excluding S3)"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "✅ Resources Deleted: $DELETED_COUNT"
+          echo "❌ Resources Failed: $FAILED_COUNT"
+          echo "📦 S3 Buckets: PRESERVED (not deleted)"
+          echo ""
+          echo "✅ Cleanup completed (S3 buckets preserved)"
+      
+      - name: Generate Cleanup Report
+        if: always()
+        run: |
+          echo "# 🧹 Cleanup Report (Except S3 Buckets)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Cleanup Date**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> $GITHUB_STEP_SUMMARY
+          echo "**Region**: ${{ env.AWS_REGION }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Account**: $(aws sts get-caller-identity --query Account --output text)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Summary" >> $GITHUB_STEP_SUMMARY
+          echo "All Cloud Custodian resources have been cleaned up except S3 buckets." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Resources Removed:" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Lambda Functions" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ EventBridge Rules" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ CloudWatch Log Groups" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ EC2 Instances (demo/test)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Security Groups (demo/test)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ IAM Test Users" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Resources Preserved:" >> $GITHUB_STEP_SUMMARY
+          echo "- 📦 S3 Buckets (all preserved)" >> $GITHUB_STEP_SUMMARY
 
   # ==============================================================================
   # Policy Deployment Jobs
