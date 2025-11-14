@@ -1433,6 +1433,8 @@ jobs:
       
       - name: Cleanup All Resources Except S3
         run: |
+          set +e  # Continue on errors
+          
           echo "🧹 Cleanup: Removing all Cloud Custodian resources EXCEPT S3 buckets"
           echo "════════════════════════════════════════════════════════════════════"
           echo "⚠️  This will remove Lambda functions, EventBridge rules, CloudWatch logs,"
@@ -1452,6 +1454,7 @@ jobs:
           # Track cleanup results
           DELETED_COUNT=0
           FAILED_COUNT=0
+          HAS_ERRORS=0
           
           # Phase 1: Delete Lambda Functions
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -1482,7 +1485,7 @@ jobs:
           echo "Phase 2: Cleaning up EventBridge Rules"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           EVENT_RULES=$(aws events list-rules --region "$AWS_REGION" --name-prefix custodian \
-            --query 'Rules[].Name' --output text 2>/dev/null)
+            --query 'Rules[].Name' --output text 2>/dev/null || echo "")
           
           if [[ -n "$EVENT_RULES" ]]; then
             for RULE in $EVENT_RULES; do
@@ -1490,15 +1493,15 @@ jobs:
               
               # Remove targets first
               TARGETS=$(aws events list-targets-by-rule --region "$AWS_REGION" --rule "$RULE" \
-                --query 'Targets[].Id' --output text 2>/dev/null)
+                --query 'Targets[].Id' --output text 2>/dev/null || echo "")
               
               if [[ -n "$TARGETS" ]]; then
                 echo "   📎 Removing targets from rule: $RULE"
-                aws events remove-targets --region "$AWS_REGION" --rule "$RULE" --ids $TARGETS 2>/dev/null
+                aws events remove-targets --region "$AWS_REGION" --rule "$RULE" --ids $TARGETS 2>&1 || echo "   ⚠️  Warning: Could not remove some targets"
               fi
               
               # Delete the rule
-              if aws events delete-rule --region "$AWS_REGION" --name "$RULE" 2>/dev/null; then
+              if aws events delete-rule --region "$AWS_REGION" --name "$RULE" 2>&1; then
                 echo "   ✅ Deleted rule: $RULE"
                 ((DELETED_COUNT++))
               else
@@ -1517,12 +1520,12 @@ jobs:
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           LOG_GROUPS=$(aws logs describe-log-groups --region "$AWS_REGION" \
             --log-group-name-prefix '/aws/lambda/custodian-' \
-            --query 'logGroups[].logGroupName' --output text 2>/dev/null)
+            --query 'logGroups[].logGroupName' --output text 2>/dev/null || echo "")
           
           if [[ -n "$LOG_GROUPS" ]]; then
             for LOG_GROUP in $LOG_GROUPS; do
               echo "🗑️  Deleting log group: $LOG_GROUP"
-              if aws logs delete-log-group --region "$AWS_REGION" --log-group-name "$LOG_GROUP" 2>/dev/null; then
+              if aws logs delete-log-group --region "$AWS_REGION" --log-group-name "$LOG_GROUP" 2>&1; then
                 echo "   ✅ Deleted: $LOG_GROUP"
                 ((DELETED_COUNT++))
               else
@@ -1541,11 +1544,11 @@ jobs:
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           EC2_INSTANCES=$(aws ec2 describe-instances --region "$AWS_REGION" \
             --filters "Name=tag:TestResource,Values=true" "Name=instance-state-name,Values=running,stopped" \
-            --query 'Reservations[].Instances[].InstanceId' --output text 2>/dev/null)
+            --query 'Reservations[].Instances[].InstanceId' --output text 2>/dev/null || echo "")
           
           if [[ -n "$EC2_INSTANCES" ]]; then
             echo "🗑️  Terminating EC2 instances: $EC2_INSTANCES"
-            if aws ec2 terminate-instances --region "$AWS_REGION" --instance-ids $EC2_INSTANCES 2>/dev/null; then
+            if aws ec2 terminate-instances --region "$AWS_REGION" --instance-ids $EC2_INSTANCES 2>&1; then
               echo "   ✅ Terminated instances"
               for INSTANCE in $EC2_INSTANCES; do
                 ((DELETED_COUNT++))
@@ -1568,12 +1571,12 @@ jobs:
           
           SECURITY_GROUPS=$(aws ec2 describe-security-groups --region "$AWS_REGION" \
             --filters "Name=group-name,Values=*demo*,*test*,*custodian*" \
-            --query 'SecurityGroups[?GroupName!=`default`].GroupId' --output text 2>/dev/null)
+            --query 'SecurityGroups[?GroupName!=`default`].GroupId' --output text 2>/dev/null || echo "")
           
           if [[ -n "$SECURITY_GROUPS" ]]; then
             for SG in $SECURITY_GROUPS; do
               echo "🗑️  Deleting security group: $SG"
-              if aws ec2 delete-security-group --region "$AWS_REGION" --group-id "$SG" 2>/dev/null; then
+              if aws ec2 delete-security-group --region "$AWS_REGION" --group-id "$SG" 2>&1; then
                 echo "   ✅ Deleted: $SG"
                 ((DELETED_COUNT++))
               else
@@ -1591,7 +1594,7 @@ jobs:
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           IAM_USERS=$(aws iam list-users \
             --query 'Users[?starts_with(UserName, `custodian-test`)].UserName' \
-            --output text 2>/dev/null)
+            --output text 2>/dev/null || echo "")
           
           if [[ -n "$IAM_USERS" ]]; then
             for USER in $IAM_USERS; do
@@ -1599,13 +1602,13 @@ jobs:
               
               # Delete access keys
               ACCESS_KEYS=$(aws iam list-access-keys --user-name "$USER" \
-                --query 'AccessKeyMetadata[].AccessKeyId' --output text 2>/dev/null)
+                --query 'AccessKeyMetadata[].AccessKeyId' --output text 2>/dev/null || echo "")
               for KEY in $ACCESS_KEYS; do
-                aws iam delete-access-key --user-name "$USER" --access-key-id "$KEY" 2>/dev/null
+                aws iam delete-access-key --user-name "$USER" --access-key-id "$KEY" 2>&1 || true
               done
               
               # Delete user
-              if aws iam delete-user --user-name "$USER" 2>/dev/null; then
+              if aws iam delete-user --user-name "$USER" 2>&1; then
                 echo "   ✅ Deleted: $USER"
                 ((DELETED_COUNT++))
               else
@@ -1626,7 +1629,16 @@ jobs:
           echo "❌ Resources Failed: $FAILED_COUNT"
           echo "📦 S3 Buckets: PRESERVED (not deleted)"
           echo ""
-          echo "✅ Cleanup completed (S3 buckets preserved)"
+          
+          if [[ $FAILED_COUNT -gt 0 ]]; then
+            echo "⚠️  Cleanup completed with some failures (S3 buckets preserved)"
+            HAS_ERRORS=1
+          else
+            echo "✅ Cleanup completed successfully (S3 buckets preserved)"
+          fi
+          
+          # Exit with proper code
+          exit $HAS_ERRORS
       
       - name: Generate Cleanup Report
         if: always()
