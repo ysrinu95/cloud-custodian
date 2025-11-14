@@ -1247,8 +1247,8 @@ jobs:
           echo "🔍 Lambda Functions (custodian-*)"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           LAMBDA_COUNT=$(aws lambda list-functions --region "$AWS_REGION" \
-            --query 'length(Functions[?starts_with(FunctionName, `custodian`)])' \
-            --output text 2>/dev/null || echo "0")
+            --query 'Functions[?starts_with(FunctionName, `custodian`)].FunctionName' \
+            --output text 2>/dev/null | wc -w || echo "0")
           echo "📦 Total Lambda Functions: $LAMBDA_COUNT"
           if [[ "$LAMBDA_COUNT" -gt 0 ]]; then
             aws lambda list-functions --region "$AWS_REGION" \
@@ -1262,7 +1262,7 @@ jobs:
           echo "📅 EventBridge Rules (custodian-*)"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           RULES_COUNT=$(aws events list-rules --region "$AWS_REGION" --name-prefix custodian \
-            --query 'length(Rules)' --output text 2>/dev/null || echo "0")
+            --query 'Rules[].Name' --output text 2>/dev/null | wc -w || echo "0")
           echo "📋 Total EventBridge Rules: $RULES_COUNT"
           if [[ "$RULES_COUNT" -gt 0 ]]; then
             aws events list-rules --region "$AWS_REGION" --name-prefix custodian \
@@ -1292,8 +1292,8 @@ jobs:
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           EC2_COUNT=$(aws ec2 describe-instances --region "$AWS_REGION" \
             --filters "Name=tag:TestResource,Values=true" \
-            --query 'length(Reservations[].Instances[?State.Name!=`terminated`])' \
-            --output text 2>/dev/null || echo "0")
+            --query 'Reservations[].Instances[?State.Name!=`terminated`].InstanceId' \
+            --output text 2>/dev/null | wc -w || echo "0")
           echo "🖥️ Total Demo EC2 Instances: $EC2_COUNT"
           if [[ "$EC2_COUNT" -gt 0 ]]; then
             aws ec2 describe-instances --region "$AWS_REGION" \
@@ -1309,8 +1309,8 @@ jobs:
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           SG_COUNT=$(aws ec2 describe-security-groups --region "$AWS_REGION" \
             --filters "Name=group-name,Values=*demo*,*test*,*custodian*" \
-            --query 'length(SecurityGroups[?GroupName!=`default`])' \
-            --output text 2>/dev/null || echo "0")
+            --query 'SecurityGroups[?GroupName!=`default`].GroupId' \
+            --output text 2>/dev/null | wc -w || echo "0")
           echo "🔒 Total Demo Security Groups: $SG_COUNT"
           echo ""
           
@@ -1319,8 +1319,8 @@ jobs:
           echo "👤 IAM Test Users"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           IAM_USER_COUNT=$(aws iam list-users \
-            --query 'length(Users[?starts_with(UserName, `custodian-test`)])' \
-            --output text 2>/dev/null || echo "0")
+            --query 'Users[?starts_with(UserName, `custodian-test`)].UserName' \
+            --output text 2>/dev/null | wc -w || echo "0")
           echo "👤 Total Test IAM Users: $IAM_USER_COUNT"
           echo ""
           
@@ -1330,8 +1330,8 @@ jobs:
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           LOG_GROUP_COUNT=$(aws logs describe-log-groups --region "$AWS_REGION" \
             --log-group-name-prefix '/aws/lambda/custodian-' \
-            --query 'length(logGroups)' \
-            --output text 2>/dev/null || echo "0")
+            --query 'logGroups[].logGroupName' \
+            --output text 2>/dev/null | wc -w || echo "0")
           echo "📊 Total CloudWatch Log Groups: $LOG_GROUP_COUNT"
           if [[ "$LOG_GROUP_COUNT" -gt 0 ]]; then
             aws logs describe-log-groups --region "$AWS_REGION" \
@@ -1355,13 +1355,13 @@ jobs:
           echo "  🔹 CloudWatch Log Groups: $LOG_GROUP_COUNT"
           echo ""
           
-          # Remove leading zeros to avoid octal interpretation errors
-          LAMBDA_COUNT=$((10#${LAMBDA_COUNT:-0}))
-          RULES_COUNT=$((10#${RULES_COUNT:-0}))
-          EC2_COUNT=$((10#${EC2_COUNT:-0}))
-          SG_COUNT=$((10#${SG_COUNT:-0}))
-          IAM_USER_COUNT=$((10#${IAM_USER_COUNT:-0}))
-          LOG_GROUP_COUNT=$((10#${LOG_GROUP_COUNT:-0}))
+          # Ensure all counts are valid integers (wc -w should already return clean numbers)
+          LAMBDA_COUNT=${LAMBDA_COUNT:-0}
+          RULES_COUNT=${RULES_COUNT:-0}
+          EC2_COUNT=${EC2_COUNT:-0}
+          SG_COUNT=${SG_COUNT:-0}
+          IAM_USER_COUNT=${IAM_USER_COUNT:-0}
+          LOG_GROUP_COUNT=${LOG_GROUP_COUNT:-0}
           
           TOTAL_RESOURCES=$((LAMBDA_COUNT + RULES_COUNT + EC2_COUNT + SG_COUNT + IAM_USER_COUNT + LOG_GROUP_COUNT))
           
