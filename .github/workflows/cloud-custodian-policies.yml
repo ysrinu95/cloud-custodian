@@ -817,7 +817,7 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install c7n c7n-org c7n-mailer
-          sudo apt-get update && sudo apt-get install -y jq
+          sudo apt-get update && sudo apt-get install -y jq dos2unix
       
       - name: Run Demo Resource Cleanup
         run: |
@@ -829,7 +829,8 @@ jobs:
           # Use the comprehensive cleanup script
           cd c7n
           
-          # Make the script executable
+          # Fix line endings and make executable
+          dos2unix scripts/cleanup-all-demos.sh
           chmod +x scripts/cleanup-all-demos.sh
           
           # Set environment variables for cleanup
@@ -857,7 +858,7 @@ jobs:
             echo ""
             
             # Run the comprehensive cleanup
-            ./scripts/cleanup-all-demos.sh --region "$AWS_REGION"
+            ./scripts/cleanup-all-demos.sh --region "$AWS_REGION" --yes
             
             echo ""
             echo "✅ Demo resource cleanup completed"
@@ -880,6 +881,515 @@ jobs:
           echo "   • Check AWS consoles to confirm resource removal"
           echo "   • KMS keys have 7-day deletion waiting period"
           echo "   • CloudWatch logs are retained separately"
+  
+  cleanup-security-tests:
+    name: 'Cleanup Security Test Resources'
+    runs-on: ubuntu-latest
+    if: github.event.inputs.operation_type == 'cleanup-security-tests'
+    
+    permissions:
+      id-token: write
+      contents: read
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-security-cleanup-${{ github.run_number }}
+      
+      - name: Install Dependencies
+        run: |
+          pip install --upgrade pip
+          pip install c7n c7n-org c7n-mailer
+          sudo apt-get update && sudo apt-get install -y jq dos2unix
+      
+      - name: Run Security Test Resource Cleanup
+        run: |
+          echo "🔒 Cleanup: Security Test Resources"
+          echo "════════════════════════════════════════════════"
+          echo "Cleaning up resources created by security finding tests"
+          echo ""
+          
+          cd c7n
+          
+          # Fix line endings and make executable
+          dos2unix scripts/comprehensive-cleanup.sh
+          chmod +x scripts/comprehensive-cleanup.sh
+          
+          export AWS_REGION="${{ env.AWS_REGION }}"
+          
+          echo "🔧 Cleanup Configuration:"
+          echo "   Region: $AWS_REGION"
+          echo "   Type: Security Tests Only"
+          echo "   Account: ${{ github.event.inputs.target_accounts || 'engg' }}"
+          echo ""
+          
+          if [[ "${{ github.event.inputs.dry_run }}" == "true" ]]; then
+            echo "🧪 DRY RUN MODE: Would clean up security test resources"
+            echo "   - Security Hub test findings"
+            echo "   - GuardDuty test resources"
+            echo "   - Config compliance test resources"
+            echo "   - Macie test jobs"
+            echo "   - IAM Access Analyzer test resources"
+            echo "   - Test S3 buckets (custodian-test-*, custodian-macie-*)"
+            echo "   - Test IAM users/roles (custodian-test-*)"
+            echo ""
+            echo "✅ Dry run completed - no actual cleanup performed"
+          else
+            echo "🚀 LIVE MODE: Cleaning up security test resources"
+            echo "⚠️ This will permanently delete test resources!"
+            echo ""
+            
+            # Run security-only cleanup
+            ./scripts/comprehensive-cleanup.sh --security-only --yes --region "$AWS_REGION"
+            
+            echo ""
+            echo "✅ Security test resource cleanup completed"
+          fi
+          
+          echo ""
+          echo "📊 Security Test Resources Cleaned:"
+          echo "   🔒 Security Hub test findings (archived)"
+          echo "   🛡️ GuardDuty test resources"
+          echo "   📋 Config test resources"
+          echo "   🔍 Macie test jobs (cancelled)"
+          echo "   🔐 IAM test users/roles"
+          echo "   📦 Test S3 buckets"
+          echo ""
+          echo "🔍 Verification:"
+          echo "   • Security Hub Console: Check findings status"
+          echo "   • IAM Console: Verify test users removed"
+          echo "   • S3 Console: Confirm test buckets deleted"
+  
+  cleanup-comprehensive:
+    name: 'Comprehensive Cleanup (All Resources)'
+    runs-on: ubuntu-latest
+    if: github.event.inputs.operation_type == 'cleanup-comprehensive'
+    
+    permissions:
+      id-token: write
+      contents: read
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-comprehensive-cleanup-${{ github.run_number }}
+      
+      - name: Install Dependencies
+        run: |
+          pip install --upgrade pip
+          pip install c7n c7n-org c7n-mailer
+          sudo apt-get update && sudo apt-get install -y jq dos2unix
+      
+      - name: Run Comprehensive Cleanup
+        run: |
+          echo "🗑️ Comprehensive Cleanup: ALL Cloud Custodian Resources"
+          echo "════════════════════════════════════════════════════════════"
+          echo "⚠️  WARNING: This will clean up ALL resources created by this workflow!"
+          echo ""
+          
+          cd c7n
+          
+          # Fix line endings and make executable
+          dos2unix scripts/comprehensive-cleanup.sh
+          chmod +x scripts/comprehensive-cleanup.sh
+          
+          export AWS_REGION="${{ env.AWS_REGION }}"
+          
+          echo "🔧 Cleanup Configuration:"
+          echo "   Region: $AWS_REGION"
+          echo "   Type: Comprehensive (ALL Resources)"
+          echo "   Account: ${{ github.event.inputs.target_accounts || 'engg' }}"
+          echo ""
+          
+          if [[ "${{ github.event.inputs.dry_run }}" == "true" ]]; then
+            echo "🧪 DRY RUN MODE: Would clean up ALL resources"
+            echo ""
+            echo "📋 Phase 1 - Security Test Resources:"
+            echo "   - Security Hub test findings"
+            echo "   - GuardDuty test findings"
+            echo "   - Config compliance violations"
+            echo "   - Macie test jobs"
+            echo "   - IAM Access Analyzer findings"
+            echo "   - Test IAM users/roles"
+            echo "   - Test S3 buckets (custodian-test-*, custodian-macie-*)"
+            echo ""
+            echo "📋 Phase 2 - Demo Resources:"
+            echo "   - EC2 demo instances"
+            echo "   - RDS demo instances"
+            echo "   - Security groups (demo tagged)"
+            echo "   - Key pairs (demo tagged)"
+            echo "   - EBS volumes/snapshots"
+            echo "   - Demo S3 buckets"
+            echo ""
+            echo "📋 Phase 3 - Cloud Custodian Infrastructure:"
+            echo "   - Lambda functions (custodian-*)"
+            echo "   - CloudWatch Events rules (custodian-*)"
+            echo "   - CloudWatch Log groups (/aws/lambda/custodian-*)"
+            echo "   - SQS queues (custodian-mailer-queue)"
+            echo "   - S3 logs bucket (ysr95-cloud-custodian-logs-*)"
+            echo ""
+            echo "📋 Phase 4 - CloudFormation & Advanced:"
+            echo "   - CloudFormation stacks (demo/test stacks)"
+            echo "   - KMS keys (demo aliases)"
+            echo "   - CloudTrail trails (demo/test)"
+            echo "   - Temporary files"
+            echo ""
+            echo "✅ Dry run completed - no actual cleanup performed"
+          else
+            echo "🚀 LIVE MODE: Cleaning up ALL resources"
+            echo "⚠️  This will permanently delete ALL Cloud Custodian resources!"
+            echo ""
+            echo "🔴 FINAL WARNING: This action cannot be undone!"
+            echo "   - All Lambda functions will be deleted"
+            echo "   - All EventBridge rules will be deleted"
+            echo "   - All demo and test resources will be deleted"
+            echo "   - All CloudWatch logs will be deleted"
+            echo "   - S3 log buckets will be emptied and deleted"
+            echo ""
+            
+            # Run comprehensive cleanup
+            ./scripts/comprehensive-cleanup.sh --comprehensive --yes --region "$AWS_REGION"
+            
+            echo ""
+            echo "✅ Comprehensive cleanup completed"
+          fi
+          
+          echo ""
+          echo "📊 Complete Cleanup Summary"
+          echo "════════════════════════════════════════════════════════════"
+          echo ""
+          echo "🔍 Phase 1 - Security Test Resources:"
+          echo "   ✅ Security Hub findings archived"
+          echo "   ✅ GuardDuty test resources removed"
+          echo "   ✅ Config test resources removed"
+          echo "   ✅ Macie jobs cancelled"
+          echo "   ✅ IAM test users/roles deleted"
+          echo "   ✅ Test S3 buckets deleted"
+          echo ""
+          echo "🖥️ Phase 2 - Demo Resources:"
+          echo "   ✅ EC2 instances terminated"
+          echo "   ✅ RDS instances deleted"
+          echo "   ✅ Security groups removed"
+          echo "   ✅ Key pairs deleted"
+          echo "   ✅ EBS volumes/snapshots deleted"
+          echo "   ✅ Demo S3 buckets removed"
+          echo ""
+          echo "⚙️ Phase 3 - Cloud Custodian Infrastructure:"
+          echo "   ✅ Lambda functions deleted"
+          echo "   ✅ EventBridge rules removed"
+          echo "   ✅ CloudWatch log groups deleted"
+          echo "   ✅ SQS queues removed"
+          echo "   ✅ S3 log buckets emptied"
+          echo ""
+          echo "🏗️ Phase 4 - Advanced Resources:"
+          echo "   ✅ CloudFormation stacks deleted"
+          echo "   ✅ KMS keys scheduled for deletion"
+          echo "   ✅ CloudTrail trails removed"
+          echo "   ✅ Temporary files cleaned"
+          echo ""
+          echo "🔍 Verification Steps:"
+          echo "   1. Lambda Console: Verify no custodian-* functions remain"
+          echo "   2. EventBridge Console: Check for custodian-* rules"
+          echo "   3. S3 Console: Confirm log buckets are empty/deleted"
+          echo "   4. EC2 Console: Verify all demo instances terminated"
+          echo "   5. IAM Console: Check test users/roles are removed"
+          echo "   6. Security Hub: Verify test findings are resolved"
+          echo ""
+          echo "⚠️ Notes:"
+          echo "   • KMS keys have 7-30 day deletion waiting period"
+          echo "   • Some resources may take a few minutes to fully delete"
+          echo "   • CloudFormation stacks may take 5-10 minutes"
+          echo "   • Check AWS console for final verification"
+          echo ""
+          echo "✅ Comprehensive cleanup completed successfully!"
+      
+      - name: Upload Cleanup Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cleanup-report-${{ github.run_number }}
+          path: |
+            c7n/logs/
+          retention-days: 30
+      
+      - name: Generate Cleanup Summary
+        if: always()
+        run: |
+          echo "# 🗑️ Comprehensive Cleanup Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Cleanup Configuration" >> $GITHUB_STEP_SUMMARY
+          echo "- **Region**: ${{ env.AWS_REGION }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Account**: ${{ github.event.inputs.target_accounts || 'engg' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Dry Run**: ${{ github.event.inputs.dry_run }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Timestamp**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "## Resources Cleaned" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔒 Security Test Resources" >> $GITHUB_STEP_SUMMARY
+          echo "- Security Hub test findings archived" >> $GITHUB_STEP_SUMMARY
+          echo "- GuardDuty test resources removed" >> $GITHUB_STEP_SUMMARY
+          echo "- Config compliance test resources removed" >> $GITHUB_STEP_SUMMARY
+          echo "- Macie test jobs cancelled" >> $GITHUB_STEP_SUMMARY
+          echo "- IAM test users and roles deleted" >> $GITHUB_STEP_SUMMARY
+          echo "- Test S3 buckets deleted" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "### 🖥️ Demo Resources" >> $GITHUB_STEP_SUMMARY
+          echo "- EC2 demo instances terminated" >> $GITHUB_STEP_SUMMARY
+          echo "- RDS demo instances deleted" >> $GITHUB_STEP_SUMMARY
+          echo "- Security groups removed" >> $GITHUB_STEP_SUMMARY
+          echo "- Key pairs deleted" >> $GITHUB_STEP_SUMMARY
+          echo "- EBS volumes and snapshots deleted" >> $GITHUB_STEP_SUMMARY
+          echo "- Demo S3 buckets removed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "### ⚙️ Cloud Custodian Infrastructure" >> $GITHUB_STEP_SUMMARY
+          echo "- Lambda functions (custodian-*) deleted" >> $GITHUB_STEP_SUMMARY
+          echo "- EventBridge rules (custodian-*) removed" >> $GITHUB_STEP_SUMMARY
+          echo "- CloudWatch log groups deleted" >> $GITHUB_STEP_SUMMARY
+          echo "- SQS queues removed" >> $GITHUB_STEP_SUMMARY
+          echo "- S3 log buckets emptied and deleted" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "### 🏗️ Advanced Resources" >> $GITHUB_STEP_SUMMARY
+          echo "- CloudFormation stacks deleted" >> $GITHUB_STEP_SUMMARY
+          echo "- KMS keys scheduled for deletion (7-day waiting period)" >> $GITHUB_STEP_SUMMARY
+          echo "- CloudTrail trails removed" >> $GITHUB_STEP_SUMMARY
+          echo "- Temporary files cleaned" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "## ⚠️ Important Notes" >> $GITHUB_STEP_SUMMARY
+          echo "- KMS keys are scheduled for deletion with a 7-30 day waiting period" >> $GITHUB_STEP_SUMMARY
+          echo "- Some resources may take a few minutes to fully disappear from console" >> $GITHUB_STEP_SUMMARY
+          echo "- CloudFormation stack deletion may take 5-10 minutes" >> $GITHUB_STEP_SUMMARY
+          echo "- Verify resource deletion in AWS console" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "## 🔍 Verification Links" >> $GITHUB_STEP_SUMMARY
+          echo "- [Lambda Console](https://${{ env.AWS_REGION }}.console.aws.amazon.com/lambda/home?region=${{ env.AWS_REGION }}#/functions)" >> $GITHUB_STEP_SUMMARY
+          echo "- [EventBridge Rules](https://${{ env.AWS_REGION }}.console.aws.amazon.com/events/home?region=${{ env.AWS_REGION }}#/rules)" >> $GITHUB_STEP_SUMMARY
+          echo "- [S3 Buckets](https://s3.console.aws.amazon.com/s3/home?region=${{ env.AWS_REGION }})" >> $GITHUB_STEP_SUMMARY
+          echo "- [EC2 Instances](https://${{ env.AWS_REGION }}.console.aws.amazon.com/ec2/home?region=${{ env.AWS_REGION }}#Instances:)" >> $GITHUB_STEP_SUMMARY
+          echo "- [Security Hub](https://${{ env.AWS_REGION }}.console.aws.amazon.com/securityhub/home?region=${{ env.AWS_REGION }}#/findings)" >> $GITHUB_STEP_SUMMARY
+  
+  cleanup-scan:
+    name: 'Cleanup Scan (Dry Run Analysis)'
+    runs-on: ubuntu-latest
+    if: github.event.inputs.operation_type == 'cleanup-scan'
+    
+    permissions:
+      id-token: write
+      contents: read
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-cleanup-scan-${{ github.run_number }}
+      
+      - name: Install Dependencies
+        run: |
+          pip install --upgrade pip
+          pip install c7n c7n-org c7n-mailer boto3
+          sudo apt-get update && sudo apt-get install -y jq
+      
+      - name: Scan for Cloud Custodian Resources
+        run: |
+          echo "🔍 Cleanup Scan: Analyzing Cloud Custodian Resources"
+          echo "════════════════════════════════════════════════════════════"
+          echo "Scanning AWS account for Cloud Custodian resources to clean up"
+          echo ""
+          
+          export AWS_REGION="${{ env.AWS_REGION }}"
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          
+          echo "📊 AWS Context:"
+          echo "   Account: $ACCOUNT_ID"
+          echo "   Region: $AWS_REGION"
+          echo "   Scan Time: $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
+          echo ""
+          
+          # Lambda Functions
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🔍 Lambda Functions (custodian-*)"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          LAMBDA_COUNT=$(aws lambda list-functions --region "$AWS_REGION" \
+            --query 'length(Functions[?starts_with(FunctionName, `custodian`)])' \
+            --output text 2>/dev/null || echo "0")
+          echo "📦 Total Lambda Functions: $LAMBDA_COUNT"
+          if [[ "$LAMBDA_COUNT" -gt 0 ]]; then
+            aws lambda list-functions --region "$AWS_REGION" \
+              --query 'Functions[?starts_with(FunctionName, `custodian`)].{Name:FunctionName,Runtime:Runtime,Size:CodeSize,Modified:LastModified}' \
+              --output table
+          fi
+          echo ""
+          
+          # EventBridge Rules
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📅 EventBridge Rules (custodian-*)"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          RULES_COUNT=$(aws events list-rules --region "$AWS_REGION" --name-prefix custodian \
+            --query 'length(Rules)' --output text 2>/dev/null || echo "0")
+          echo "📋 Total EventBridge Rules: $RULES_COUNT"
+          if [[ "$RULES_COUNT" -gt 0 ]]; then
+            aws events list-rules --region "$AWS_REGION" --name-prefix custodian \
+              --query 'Rules[].{Name:Name,State:State,Schedule:ScheduleExpression}' \
+              --output table
+          fi
+          echo ""
+          
+          # S3 Buckets
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📦 S3 Buckets (custodian-*, demo, test)"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          BUCKET_LIST=$(aws s3 ls | grep -E "(custodian|demo|test)" || echo "")
+          if [[ -n "$BUCKET_LIST" ]]; then
+            echo "$BUCKET_LIST" | while read -r created time zone name; do
+              SIZE=$(aws s3 ls s3://$name --recursive --summarize 2>/dev/null | grep "Total Size" | awk '{print $3}')
+              echo "  📦 $name (Size: ${SIZE:-0} bytes)"
+            done
+          else
+            echo "  ✅ No matching S3 buckets found"
+          fi
+          echo ""
+          
+          # EC2 Instances
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🖥️ EC2 Instances (demo/test tagged)"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          EC2_COUNT=$(aws ec2 describe-instances --region "$AWS_REGION" \
+            --filters "Name=tag:TestResource,Values=true" \
+            --query 'length(Reservations[].Instances[?State.Name!=`terminated`])' \
+            --output text 2>/dev/null || echo "0")
+          echo "🖥️ Total Demo EC2 Instances: $EC2_COUNT"
+          if [[ "$EC2_COUNT" -gt 0 ]]; then
+            aws ec2 describe-instances --region "$AWS_REGION" \
+              --filters "Name=tag:TestResource,Values=true" \
+              --query 'Reservations[].Instances[?State.Name!=`terminated`].{ID:InstanceId,Type:InstanceType,State:State.Name,Name:Tags[?Key==`Name`].Value|[0]}' \
+              --output table
+          fi
+          echo ""
+          
+          # Security Groups
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🔒 Security Groups (demo/test)"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          SG_COUNT=$(aws ec2 describe-security-groups --region "$AWS_REGION" \
+            --filters "Name=group-name,Values=*demo*,*test*,*custodian*" \
+            --query 'length(SecurityGroups[?GroupName!=`default`])' \
+            --output text 2>/dev/null || echo "0")
+          echo "🔒 Total Demo Security Groups: $SG_COUNT"
+          echo ""
+          
+          # IAM Users
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "👤 IAM Test Users"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          IAM_USER_COUNT=$(aws iam list-users \
+            --query 'length(Users[?starts_with(UserName, `custodian-test`)])' \
+            --output text 2>/dev/null || echo "0")
+          echo "👤 Total Test IAM Users: $IAM_USER_COUNT"
+          echo ""
+          
+          # CloudWatch Log Groups
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📊 CloudWatch Log Groups (/aws/lambda/custodian-*)"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          LOG_GROUP_COUNT=$(aws logs describe-log-groups --region "$AWS_REGION" \
+            --log-group-name-prefix '/aws/lambda/custodian-' \
+            --query 'length(logGroups)' \
+            --output text 2>/dev/null || echo "0")
+          echo "📊 Total CloudWatch Log Groups: $LOG_GROUP_COUNT"
+          if [[ "$LOG_GROUP_COUNT" -gt 0 ]]; then
+            aws logs describe-log-groups --region "$AWS_REGION" \
+              --log-group-name-prefix '/aws/lambda/custodian-' \
+              --query 'logGroups[].{Name:logGroupName,Size:storedBytes,RetentionDays:retentionInDays}' \
+              --output table
+          fi
+          echo ""
+          
+          # Summary
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📊 CLEANUP SCAN SUMMARY"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "Resource Count Summary:"
+          echo "  🔹 Lambda Functions: $LAMBDA_COUNT"
+          echo "  🔹 EventBridge Rules: $RULES_COUNT"
+          echo "  🔹 EC2 Instances: $EC2_COUNT"
+          echo "  🔹 Security Groups: $SG_COUNT"
+          echo "  🔹 IAM Test Users: $IAM_USER_COUNT"
+          echo "  🔹 CloudWatch Log Groups: $LOG_GROUP_COUNT"
+          echo ""
+          
+          TOTAL_RESOURCES=$((LAMBDA_COUNT + RULES_COUNT + EC2_COUNT + SG_COUNT + IAM_USER_COUNT + LOG_GROUP_COUNT))
+          
+          if [[ "$TOTAL_RESOURCES" -eq 0 ]]; then
+            echo "✅ No Cloud Custodian resources found to clean up"
+            echo "   Your AWS account is clean!"
+          else
+            echo "⚠️  Total Resources Found: $TOTAL_RESOURCES"
+            echo ""
+            echo "💡 Recommended Actions:"
+            echo "   1. Review the resources listed above"
+            echo "   2. Run 'cleanup-comprehensive' to remove all resources"
+            echo "   3. Or run specific cleanup jobs:"
+            echo "      • cleanup-demo-resources: Remove demo EC2/RDS/EBS resources"
+            echo "      • cleanup-security-tests: Remove security test resources"
+            echo "      • cleanup-comprehensive: Remove ALL Cloud Custodian resources"
+          fi
+          echo ""
+          echo "✅ Cleanup scan completed"
+      
+      - name: Generate Scan Report
+        if: always()
+        run: |
+          echo "# 🔍 Cloud Custodian Resource Scan Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Scan Date**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> $GITHUB_STEP_SUMMARY
+          echo "**Region**: ${{ env.AWS_REGION }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Account**: $(aws sts get-caller-identity --query Account --output text)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Resource Summary" >> $GITHUB_STEP_SUMMARY
+          echo "This scan identified Cloud Custodian resources that can be cleaned up." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Use the workflow dispatch options to clean up specific resource types:" >> $GITHUB_STEP_SUMMARY
+          echo "- **cleanup-demo-resources**: EC2/RDS/EBS demo resources" >> $GITHUB_STEP_SUMMARY
+          echo "- **cleanup-security-tests**: Security Hub/GuardDuty/Config test resources" >> $GITHUB_STEP_SUMMARY
+          echo "- **cleanup-comprehensive**: ALL Cloud Custodian resources" >> $GITHUB_STEP_SUMMARY
 
   # ==============================================================================
   # Policy Deployment Jobs
